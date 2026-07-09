@@ -1,0 +1,38 @@
+# .dockerignore — keep the Docker image lean
+# Test and dev files
+tests/
+*.md
+requirements-dev.txt
+.env
+.env.*
+!.env.example
+
+# Git history
+.git/
+.github/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Python cache
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+
+# Local output / temp
+output_test/
+*.tmp
+*.bak
+
+# Scripts (not needed in image)
+scripts/
+
+# Docs
+walkthrough.md
+fix_completion_plan.md

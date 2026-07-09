@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "factual_1",
+    "prompt": "What is the capital of France?"
+  },
+  {
+    "task_id": "math_1",
+    "prompt": "Calculate 342 * 12"
+  },
+  {
+    "task_id": "sentiment_1",
+    "prompt": "Determine the sentiment of this text: 'I absolutely love this new update!'"
+  },
+  {
+    "task_id": "summarization_1",
+    "prompt": "Summarize the following passage: 'Artificial intelligence is simulation of human intelligence processes by machines, especially computer systems. These processes include learning, reasoning, self-correction, and problem solving.'"
+  },
+  {
+    "task_id": "ner_1",
+    "prompt": "Extract the named entities from this sentence: 'Barack Obama was born in Hawaii.'"
+  },
+  {
+    "task_id": "debug_1",
+    "prompt": "Find and fix the bug in this Python function:\ndef add_numbers(a, b):\nreturn a - b"
+  },
+  {
+    "task_id": "logic_1",
+    "prompt": "If John is taller than Mary, and Mary is taller than Sue, is John taller than Sue?"
+  },
+  {
+    "task_id": "code_gen_1",
+    "prompt": "Write a Python function that checks if a number is prime."
+  }
+]
