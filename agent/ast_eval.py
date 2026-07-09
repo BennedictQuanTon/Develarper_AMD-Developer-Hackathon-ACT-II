@@ -1,11 +1,13 @@
 import ast
 import operator
 import re
+from collections.abc import Callable
+from typing import Any
 
 
 class SafeEvalVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
-        self.operators = {
+        self.operators: dict[type[ast.AST], Callable[..., Any]] = {
             ast.Add: operator.add,
             ast.Sub: operator.sub,
             ast.Mult: operator.mul,
@@ -18,6 +20,12 @@ class SafeEvalVisitor(ast.NodeVisitor):
             ast.UAdd: operator.pos,
         }
 
+    def visit(self, node: ast.AST) -> int | float:
+        val = super().visit(node)
+        if isinstance(val, int | float):
+            return val
+        raise TypeError(f"Unexpected AST node value type: {type(val)}")
+
     def visit_BinOp(self, node: ast.BinOp) -> int | float:
         left = self.visit(node.left)
         right = self.visit(node.right)
@@ -29,14 +37,20 @@ class SafeEvalVisitor(ast.NodeVisitor):
             # Prevent massive exponentiation to avoid resource exhaustion
             if op_type in (ast.Pow, ast.BitXor) and right > 1000:
                 raise ValueError("Exponent too large in AST evaluation")
-            return self.operators[op_type](left, right)
+            res = self.operators[op_type](left, right)
+            if isinstance(res, int | float):
+                return res
+            raise TypeError("Binary operator result is not numeric")
         raise ValueError(f"Unsupported binary operator: {op_type}")
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> int | float:
         operand = self.visit(node.operand)
         op_type = type(node.op)
         if op_type in self.operators:
-            return self.operators[op_type](operand)
+            res = self.operators[op_type](operand)
+            if isinstance(res, int | float):
+                return res
+            raise TypeError("Unary operator result is not numeric")
         raise ValueError(f"Unsupported unary operator: {op_type}")
 
     def visit_Constant(self, node: ast.Constant) -> int | float:

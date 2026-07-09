@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,7 +9,7 @@ from agent.cache import SemanticCache
 
 
 @pytest.mark.asyncio
-async def test_integration_end_to_end(tmp_path) -> None:  # type: ignore[type-arg]
+async def test_integration_end_to_end(tmp_path: Path) -> None:
     input_file = os.path.join(os.path.dirname(__file__), "fixtures/sample_tasks.json")
     output_file = str(tmp_path / "results.json")
 

@@ -136,7 +136,7 @@ def classify(prompt: str) -> str:
         scores[ROUTE_LOCAL_GENERAL] += 3
 
     # 5. Determine the winner
-    best_category = max(scores, key=scores.get)
+    best_category = max(scores, key=lambda k: scores[k])
     max_score = scores[best_category]
 
     if max_score < THRESHOLD:

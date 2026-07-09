@@ -4,12 +4,19 @@ import os
 import sys
 import threading
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class Watchdog:
-    def __init__(self, timeout_seconds: float, tasks: list[dict], results_path: str, get_current_results: Callable[[], list[dict]]) -> None:
+    def __init__(
+        self,
+        timeout_seconds: float,
+        tasks: list[dict[str, Any]],
+        results_path: str,
+        get_current_results: Callable[[], list[dict[str, Any]]],
+    ) -> None:
         self.timeout_seconds = timeout_seconds
         self.tasks = tasks
         self.results_path = results_path

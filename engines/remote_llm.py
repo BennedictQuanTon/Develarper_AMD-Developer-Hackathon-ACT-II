@@ -132,4 +132,4 @@ class RemoteLLMEngine:
                     response.raise_for_status()
 
                 data = await response.json()
-                return data["choices"][0]["message"]["content"].strip()
+                return str(data["choices"][0]["message"]["content"]).strip()
