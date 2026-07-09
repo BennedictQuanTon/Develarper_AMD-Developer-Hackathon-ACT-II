@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from llama_cpp import Llama
 
@@ -32,7 +32,7 @@ class LocalSLMEngine:
 
         self.model = Llama(model_path=model_path, n_ctx=n_ctx, n_threads=n_threads, n_gpu_layers=n_gpu_layers, verbose=False)
 
-    def generate(self, prompt: str, system_prompt: str = "", max_tokens: int = 250, temperature: float = 0.1, grammar=None) -> str:
+    def generate(self, prompt: str, system_prompt: str = "", max_tokens: int = 250, temperature: float = 0.1, grammar: Any = None) -> str:
         # Format using Qwen2.5 Chat Template
         formatted_prompt = ""
         if system_prompt:
@@ -47,6 +47,9 @@ class LocalSLMEngine:
             echo=False,
             grammar=grammar,
         )
+
+        if not isinstance(response, dict):
+            raise ValueError("Expected dictionary response from Llama model")
 
         choice = response["choices"][0]
         text = choice["text"].strip()
