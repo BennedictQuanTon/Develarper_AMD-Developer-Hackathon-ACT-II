@@ -1,5 +1,5 @@
-import pytest
 from agent.ast_eval import evaluate_math_expression
+
 
 def test_valid_expressions() -> None:
     assert evaluate_math_expression("342 * 12") == "4104"
@@ -12,11 +12,13 @@ def test_valid_expressions() -> None:
     assert evaluate_math_expression("-5 + 10") == "5"
     assert evaluate_math_expression("(5 + 5) * 2") == "20"
 
+
 def test_prefix_cleaning() -> None:
     assert evaluate_math_expression("Calculate: 10 + 20") == "30"
     assert evaluate_math_expression("solve 5 * 5") == "25"
     assert evaluate_math_expression("what is 8 / 2?") == "4"
     assert evaluate_math_expression("evaluate 3 + 4.") == "7"
+
 
 def test_invalid_expressions() -> None:
     # Not a pure math expression
@@ -27,6 +29,7 @@ def test_invalid_expressions() -> None:
     assert evaluate_math_expression("abc") is None
     assert evaluate_math_expression("123") is None
     assert evaluate_math_expression("+ - *") is None
+
 
 def test_safety_checks() -> None:
     # Division by zero

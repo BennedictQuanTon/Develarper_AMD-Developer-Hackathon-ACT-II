@@ -1,5 +1,6 @@
 # handlers/_base.py
 """Shared utilities for all handlers."""
+
 import logging
 import os
 
@@ -12,7 +13,7 @@ def load_prompt_template(filename: str) -> str:
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.join(base_dir, "prompts", filename)
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read().strip()
     logger.warning("Prompt template not found: %s", path)
     return ""

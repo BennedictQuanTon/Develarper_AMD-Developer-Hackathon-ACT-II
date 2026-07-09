@@ -2,12 +2,12 @@
 main.py — Entrypoint
 Reads /input/tasks.json, routes each task through AgentRouter, writes /output/results.json.
 """
+
 import asyncio
 import json
 import logging
 import os
 import sys
-from typing import Dict, List
 
 from dotenv import load_dotenv
 
@@ -30,11 +30,11 @@ OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "/output/results.json")
 # Global state
 _cache = SemanticCache()
 _router = AgentRouter(cache=_cache)
-_completed: List[Dict[str, str]] = []
+_completed: list[dict[str, str]] = []
 _lock = asyncio.Lock()
 
 
-def _get_results() -> List[Dict[str, str]]:
+def _get_results() -> list[dict[str, str]]:
     return list(_completed)
 
 
@@ -51,13 +51,13 @@ async def main() -> None:
         sys.exit(1)
 
     try:
-        with open(INPUT_PATH, "r", encoding="utf-8") as f:
+        with open(INPUT_PATH, encoding="utf-8") as f:
             raw = json.load(f)
     except Exception as exc:
         logger.error("Failed to parse input: %s", exc)
         sys.exit(1)
 
-    tasks: List[Task] = []
+    tasks: list[Task] = []
     for item in raw:
         try:
             tasks.append(Task.model_validate(item))

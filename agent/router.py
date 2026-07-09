@@ -7,8 +7,8 @@
     Layer 3:  Local SLM — Qwen2.5-1.5B via llama.cpp
     Layer 4:  Remote Fireworks API (category-aware model + prompt compression)
 """
+
 import logging
-from typing import Callable
 
 from agent.ast_eval import evaluate_math_expression
 from agent.cache import SemanticCache
@@ -22,21 +22,21 @@ from agent.classifier import (
     ROUTE_LOCAL_SENTIMENT,
     classify,
 )
+from handlers.code_gen import CodeGenHandler
+from handlers.debug import DebugHandler
 
 # Handlers — local
 from handlers.factual import FactualHandler
-from handlers.summarization import SummarizationHandler
-from handlers.sentiment import SentimentHandler
-from handlers.ner import NERHandler
+from handlers.logic import LogicHandler
 
 # Handlers — remote
 from handlers.math_handler import MathHandler
-from handlers.debug import DebugHandler
-from handlers.code_gen import CodeGenHandler
-from handlers.logic import LogicHandler
+from handlers.ner import NERHandler
 
 # Escalation fallback (remote, general-purpose)
 from handlers.remote_handlers import RemoteGeneralHandler
+from handlers.sentiment import SentimentHandler
+from handlers.summarization import SummarizationHandler
 
 logger = logging.getLogger(__name__)
 
@@ -97,18 +97,14 @@ class AgentRouter:
                 res = self._sentiment.handle(prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] Sentiment escalated → remote", task_id)
-                    res = await self._remote_general.handle(
-                        prompt, category=ROUTE_LOCAL_SENTIMENT
-                    )
+                    res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_SENTIMENT)
                 return res
 
             if route == ROUTE_LOCAL_NER:
                 res = self._ner.handle(prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] NER escalated → remote", task_id)
-                    res = await self._remote_general.handle(
-                        prompt, category=ROUTE_LOCAL_NER
-                    )
+                    res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_NER)
                 return res
 
             if route == ROUTE_LOCAL_GENERAL:
@@ -119,9 +115,7 @@ class AgentRouter:
                     res = self._factual.handle(prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] Local general escalated → remote", task_id)
-                    res = await self._remote_general.handle(
-                        prompt, category=ROUTE_LOCAL_GENERAL
-                    )
+                    res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_GENERAL)
                 return res
 
             # ---- Remote routes ----
@@ -138,9 +132,7 @@ class AgentRouter:
                 return await self._logic.handle(prompt)
 
             if route == ROUTE_API_LONG:
-                return await self._remote_general.handle(
-                    prompt, category=ROUTE_API_LONG
-                )
+                return await self._remote_general.handle(prompt, category=ROUTE_API_LONG)
 
             # Unexpected fallback
             logger.warning("[%s] Unknown route '%s' → remote general", task_id, route)

@@ -1,24 +1,22 @@
 import logging
 import os
 import re
-from typing import Optional
+
 import aiohttp
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Model priority list per category (reads ALLOWED_MODELS from env at startup)
 # ---------------------------------------------------------------------------
-ALLOWED_MODELS: list[str] = [
-    m.strip() for m in os.environ.get("ALLOWED_MODELS", "").split(",") if m.strip()
-]
+ALLOWED_MODELS: list[str] = [m.strip() for m in os.environ.get("ALLOWED_MODELS", "").split(",") if m.strip()]
 
 # Priority preferences per category — first matching model in ALLOWED_MODELS wins
 CATEGORY_MODEL_PREFERENCE: dict[str, list[str]] = {
-    "API_CODE":         ["kimi-k2p7-code", "gemma-4-31b-it"],
-    "API_MATH":         ["gemma-4-31b-it", "gemma-4-31b-it-nvfp4"],
-    "API_LOGIC":        ["gemma-4-31b-it", "minimax-m3"],
+    "API_CODE": ["kimi-k2p7-code", "gemma-4-31b-it"],
+    "API_MATH": ["gemma-4-31b-it", "gemma-4-31b-it-nvfp4"],
+    "API_LOGIC": ["gemma-4-31b-it", "minimax-m3"],
     "API_LONG_CONTEXT": ["gemma-4-26b-a4b-it", "gemma-4-31b-it-nvfp4"],
 }
 
@@ -35,9 +33,9 @@ _FILLER_RE = re.compile(
 )
 
 _OUTPUT_SUFFIX: dict[str, str] = {
-    "API_CODE":         " Return ONLY raw code. No markdown, no explanation.",
-    "API_MATH":         " Output ONLY the final numeric answer.",
-    "API_LOGIC":        " Output ONLY the final answer.",
+    "API_CODE": " Return ONLY raw code. No markdown, no explanation.",
+    "API_MATH": " Output ONLY the final numeric answer.",
+    "API_LOGIC": " Output ONLY the final answer.",
     "API_LONG_CONTEXT": " Summarize in 3 sentences max.",
 }
 
@@ -74,9 +72,7 @@ def select_remote_model(category: str) -> str:
 class RemoteLLMEngine:
     def __init__(self) -> None:
         self.api_key = os.environ.get("FIREWORKS_API_KEY", "")
-        raw_url = os.environ.get(
-            "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1"
-        )
+        raw_url = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
 
         # Normalise: ensure the URL ends at /v1
         if raw_url.endswith("/v1"):
@@ -89,19 +85,14 @@ class RemoteLLMEngine:
         self.endpoint = f"{base}/chat/completions"
 
         if not self.api_key:
-            logger.warning(
-                "FIREWORKS_API_KEY is not set. Remote API calls will fail with 401. "
-                "Set the key in your .env file before running Phase 5."
-            )
+            logger.warning("FIREWORKS_API_KEY is not set. Remote API calls will fail with 401. Set the key in your .env file before running Phase 5.")
         logger.info("Remote LLM Engine → %s", self.endpoint)
 
     @retry(
         reraise=True,
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(
-            (aiohttp.ClientResponseError, aiohttp.ClientConnectorError)
-        ),
+        retry=retry_if_exception_type((aiohttp.ClientResponseError, aiohttp.ClientConnectorError)),
     )
     async def generate(
         self,
@@ -134,14 +125,10 @@ class RemoteLLMEngine:
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.endpoint, headers=headers, json=payload
-            ) as response:
+            async with session.post(self.endpoint, headers=headers, json=payload) as response:
                 if response.status != 200:
                     text = await response.text()
-                    logger.error(
-                        "Fireworks API error (status %d): %s", response.status, text
-                    )
+                    logger.error("Fireworks API error (status %d): %s", response.status, text)
                     response.raise_for_status()
 
                 data = await response.json()

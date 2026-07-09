@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, patch
-from engines.remote_llm import RemoteLLMEngine, select_remote_model, compress_prompt, CATEGORY_MODEL_PREFERENCE
+
+import pytest
+
+from engines.remote_llm import RemoteLLMEngine, compress_prompt, select_remote_model
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +69,7 @@ def test_model_selection_long_context() -> None:
 @pytest.mark.asyncio
 async def test_remote_llm_generate_mocked() -> None:
     engine = RemoteLLMEngine()
-    mock_response = {
-        "choices": [{"message": {"content": "42"}}]
-    }
+    mock_response = {"choices": [{"message": {"content": "42"}}]}
     with patch("aiohttp.ClientSession.post") as mock_post:
         mock_resp = AsyncMock()
         mock_resp.status = 200

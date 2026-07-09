@@ -1,5 +1,6 @@
 # handlers/factual.py
 import logging
+
 from engines.local_slm import LocalSLMEngine
 from handlers._base import load_prompt_template
 
@@ -14,6 +15,4 @@ class FactualHandler:
         self.system_prompt = load_prompt_template("factual.txt")
 
     def handle(self, prompt: str) -> str:
-        return self.engine.generate(
-            prompt, self.system_prompt, max_tokens=150
-        )
+        return self.engine.generate(prompt, self.system_prompt, max_tokens=150)

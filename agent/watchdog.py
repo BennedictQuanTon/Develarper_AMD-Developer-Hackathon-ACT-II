@@ -3,23 +3,18 @@ import logging
 import os
 import sys
 import threading
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
+
 class Watchdog:
-    def __init__(
-        self, 
-        timeout_seconds: float, 
-        tasks: List[dict], 
-        results_path: str, 
-        get_current_results: Callable[[], List[dict]]
-    ) -> None:
+    def __init__(self, timeout_seconds: float, tasks: list[dict], results_path: str, get_current_results: Callable[[], list[dict]]) -> None:
         self.timeout_seconds = timeout_seconds
         self.tasks = tasks
         self.results_path = results_path
         self.get_current_results = get_current_results
-        self.timer: Optional[threading.Timer] = None
+        self.timer: threading.Timer | None = None
 
     def start(self) -> None:
         self.timer = threading.Timer(self.timeout_seconds, self._timeout_handler)
@@ -37,16 +32,13 @@ class Watchdog:
         try:
             completed_results = self.get_current_results()
             completed_ids = {r["task_id"] for r in completed_results}
-            
+
             final_results = list(completed_results)
             for task in self.tasks:
                 tid = task.get("task_id")
                 if tid and tid not in completed_ids:
-                    final_results.append({
-                        "task_id": tid,
-                        "answer": "Error: Execution timed out. Default fallback response."
-                    })
-                    
+                    final_results.append({"task_id": tid, "answer": "Error: Execution timed out. Default fallback response."})
+
             # Atomic write
             temp_path = self.results_path + ".tmp"
             os.makedirs(os.path.dirname(self.results_path), exist_ok=True)

@@ -2,10 +2,11 @@
 """
 Kept for backwards compatibility. All logic now lives in individual handler files.
 """
+
 from handlers._base import load_prompt_template
-from handlers.sentiment import SentimentHandler as LocalSentimentHandler
-from handlers.ner import NERHandler as LocalNERHandler
 from handlers.factual import FactualHandler
+from handlers.ner import NERHandler as LocalNERHandler
+from handlers.sentiment import SentimentHandler as LocalSentimentHandler
 from handlers.summarization import SummarizationHandler
 
 
