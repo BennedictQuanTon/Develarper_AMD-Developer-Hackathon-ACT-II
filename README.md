@@ -2,7 +2,7 @@
 
 **Team**: Develarper
 
-> **Hackathon Goal**: Build a containerized AI agent covering 8 capability domains, pass the LLM-Judge accuracy gate, and **minimize total Fireworks API tokens** for leaderboard ranking.
+> **Hackathon Goal**: Build a containerized AI agent covering 8 capability domains, pass the LLM-Judge accuracy gate (≥80%), and **minimize total Fireworks API tokens** for leaderboard ranking.
 
 ---
 
@@ -20,7 +20,7 @@ Input Task
 [L1b] AST Math Evaluator              → pure expression → 0 tokens (deterministic)
     │ NOT PURE MATH
     ▼
-[L2]  Weighted Scoring Classifier     → 0 tokens, <1ms  (pure re module)
+[L2]  Semantic Embedding Classifier   → 0 tokens, ~10ms (all-MiniLM-L6-v2, local)
     │
     ├─► LOCAL_SENTIMENT / LOCAL_NER / LOCAL_GENERAL
     │       ▼
@@ -49,6 +49,14 @@ Input Task
 | Logical Reasoning | `API_LOGIC` | `gemma-4-31b-it` | 150 |
 | Code Generation | `API_CODE` | `kimi-k2p7-code` | 500 |
 
+### Semantic Classifier (L2)
+
+Layer 2 uses **`all-MiniLM-L6-v2`** (sentence-transformers) for zero-shot semantic classification:
+- Encodes the prompt into a vector embedding (~10ms, CPU-only)
+- Compares cosine similarity against pre-computed label anchor embeddings for all 6 routes
+- Picks the route with highest semantic similarity — no regex, no hardcoded keywords
+- Model size: ~90 MB | RAM: ~200 MB | Runs entirely local → **0 Fireworks tokens**
+
 ### Prompt Compression
 
 Before every remote API call, the prompt goes through two transforms:
@@ -66,7 +74,7 @@ This reduces input + output tokens on every remote call.
 │   ├── schemas.py        # Pydantic Task & Result models
 │   ├── cache.py          # SHA-256 semantic dedup cache (thread-safe)
 │   ├── ast_eval.py       # Safe deterministic math evaluator (AST whitelist)
-│   ├── classifier.py     # Weighted scoring router (pure re, 0 deps)
+│   ├── classifier.py     # Semantic embedding classifier (all-MiniLM-L6-v2)
 │   ├── router.py         # AgentRouter — orchestrates all 4 layers
 │   └── watchdog.py       # Daemon thread: fires at 570s, flushes partial output
 │
@@ -87,163 +95,160 @@ This reduces input + output tokens on every remote call.
 │   └── remote_handlers.py # RemoteGeneralHandler (escalation fallback)
 │
 ├── prompts/              # System prompt templates (.txt)
-├── models/               # Bundled GGUF weights (~986 MB, not tracked in git)
+├── models/               # Bundled GGUF weights (~1 GB, not tracked in git)
 ├── tests/
 │   ├── fixtures/
+│   │   ├── practice_tasks.json    # 8 practice tasks from CONTEXT.md
 │   │   ├── sample_tasks.json      # 8 sample tasks (one per domain)
 │   │   └── expected_results.json  # Baseline expected answers
 │   ├── test_ast_eval.py
 │   ├── test_cache.py
 │   ├── test_classifier.py
-│   ├── test_remote_llm.py   # Tests compress_prompt + model selection
-│   ├── test_router.py       # Tests all 4 routing layers end-to-end
-│   └── test_integration.py  # Full pipeline with mocked API
+│   ├── test_remote_llm.py
+│   ├── test_router.py
+│   └── test_integration.py
+│
 ├── scripts/
+│   ├── setup.sh             # 🚀 First-time setup (install everything)
+│   ├── run.sh               # ▶️  Run agent with custom input/output
+│   ├── test_local.py        # 🧪 Run practice tasks locally + token stats
 │   ├── download_model.sh    # Download GGUF weights from HuggingFace
 │   └── simulate_grading.sh  # Docker run with 4GB RAM / 2 CPU constraints
-├── main.py                  # Entrypoint
+│
+├── output/               # Generated results (git-ignored)
+├── main.py               # Entrypoint
 ├── Dockerfile
-├── .env.example             # Template — copy to .env and fill in credentials
+├── .env.example          # Template — copy to .env and fill in credentials
 └── requirements.txt
 ```
 
 ---
 
-## Getting Started (For Teammates)
+## Getting Started
 
-> Follow these steps in order after cloning the repo.
-
-### Step 0: Clone the repo
+> **Lần đầu fork về?** Chỉ cần 1 lệnh:
 
 ```bash
-git clone https://github.com/<your-org>/Develarper_AMD-Developer-Hackathon-ACT-II.git
-cd Develarper_AMD-Developer-Hackathon-ACT-II
+bash scripts/setup.sh
 ```
 
-### Step 1: Create a virtual environment
+Script này tự động:
+- Tạo virtual environment (`.venv`)
+- Cài `torch` CPU-only (tránh CUDA wheels 2.5 GB)
+- Cài tất cả dependencies từ `requirements.txt`
+- Cài `llama-cpp-python` (CPU wheel, không cần C++ compiler)
+- Pre-cache `all-MiniLM-L6-v2` (~90 MB)
+- Download `Qwen2.5-1.5B Q4_K_M` GGUF (~1 GB)
+- Tạo `.env` từ `.env.example`
+
+Sau đó điền API key vào `.env`:
+```bash
+FIREWORKS_API_KEY=<your_key>
+```
+
+---
+
+## Chạy dự án
+
+### Chạy với input/output tùy chỉnh
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+# Dùng practice tasks mặc định
+bash scripts/run.sh
+
+# Chỉ định input file
+bash scripts/run.sh path/to/tasks.json
+
+# Chỉ định cả input và output
+bash scripts/run.sh path/to/tasks.json path/to/results.json
 ```
 
-### Step 2: Install dependencies
+### Chạy test local + xem token stats
 
 ```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Install llama-cpp-python (precompiled CPU wheel — no C++ compiler needed)
-pip install llama-cpp-python \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+PYTHONPATH=. python scripts/test_local.py
 ```
 
-> **Apple Silicon (M1/M2/M3)** or **CUDA GPU**: You can install the Metal/CUDA wheel instead for faster inference during development. But make sure `LOCAL_N_GPU_LAYERS=0` in `.env` for Docker (CPU-only inside container).
+Output mẫu:
+```
+[1/8] practice-01  │  route: LOCAL_GENERAL  │  ⏱ 1.2s
+      📥 input: 114 tokens   📤 output: 16 tokens   📊 total: 130 tokens
+ANSWER : The capital of Australia is Canberra...
 
-### Step 3: Download the local SLM weights
+======================================================================
+  TỔNG KẾT TOKEN USAGE
+======================================================================
+  📥 Tổng input tokens  : 1,107
+  📤 Tổng output tokens : 489
+  📊 Tổng cộng          : 1,596
+
+  ⚠️  Đây là LOCAL tokens (0 Fireworks tokens)
+```
+
+### Chạy unit tests
 
 ```bash
-bash scripts/download_model.sh
-```
-
-This downloads `qwen2.5-1.5b-instruct-q4_k_m.gguf` (~1 GB) into the `models/` directory.
-
-> `models/` is in `.gitignore` — weights are **never committed to git**.
-
-### Step 4: Configure environment variables
-
-```bash
-cp .env.example .env
-```
-
-Then open `.env` and fill in:
-
-```
-FIREWORKS_API_KEY=<your_key>       # ← Required for remote API calls (Phase 5+)
-FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
-ALLOWED_MODELS=minimax-m3,kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,gemma-4-31b-it-nvfp4
-```
-
-> Without `FIREWORKS_API_KEY`, local SLM tasks (Sentiment, NER, Factual, Summarization) still work. Only remote escalation calls will fail.
-
-### Step 5: Run the test suite
-
-```bash
-# Run all unit + router tests (no model loading — instant)
+# Unit tests — không cần model (mocked)
 PYTHONPATH=. pytest tests/test_ast_eval.py tests/test_cache.py \
-    tests/test_classifier.py tests/test_remote_llm.py tests/test_router.py -v
+    tests/test_remote_llm.py tests/test_router.py -v
 
-# Run the full integration test (mocked API, loads local SLM)
+# Full integration test (loads local SLM)
 PYTHONPATH=. python tests/test_integration.py
-```
-
-Expected output: **33 passed, 0 warnings** for unit tests.
-
-### Step 6: Run locally against fixture tasks
-
-```bash
-mkdir -p output
-
-INPUT_PATH=tests/fixtures/sample_tasks.json \
-OUTPUT_PATH=output/results.json \
-PYTHONPATH=. python main.py
-
-cat output/results.json
 ```
 
 ---
 
 ## Docker Build & Grading Simulation
 
-> Download the model weights first (Step 3 above) before building.
+> Download model weights trước khi build: `bash scripts/download_model.sh`
 
 ```bash
-# 1. Build image (use --platform linux/amd64 for AMD submission)
+# 1. Build image (bắt buộc dùng --platform linux/amd64 để submit)
 docker buildx build --platform linux/amd64 \
     -t <your-dockerhub-username>/develarper-agent:latest .
 
-# 2. Check image size (must be < 10 GB compressed)
+# 2. Kiểm tra image size (phải < 10 GB compressed)
 docker images <your-dockerhub-username>/develarper-agent:latest
 
-# 3. Simulate the grading environment (4 GB RAM, 2 CPUs, no network)
+# 3. Simulate grading environment (4 GB RAM, 2 CPUs, no network)
 FIREWORKS_API_KEY=your_key bash scripts/simulate_grading.sh
 
-# 4. View results
+# 4. Xem kết quả
 cat output_test/results.json
 
-# 5. Push to Docker Hub when ready to submit
+# 5. Push lên Docker Hub khi sẵn sàng submit
 docker push <your-dockerhub-username>/develarper-agent:latest
 ```
 
 ---
 
-## Environment Variables Reference
+## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `FIREWORKS_API_KEY` | Phase 5+ | API key for Fireworks AI (injected by harness at judging) |
-| `FIREWORKS_BASE_URL` | Phase 5+ | Proxy URL for token counting (harness injects this) |
-| `ALLOWED_MODELS` | Phase 5+ | Comma-separated list of approved model IDs |
-| `LOCAL_MODEL_PATH` | Optional | Path to GGUF file (default: `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`) |
-| `LOCAL_N_GPU_LAYERS` | Optional | GPU layers for llama.cpp (`0` = CPU-only, `-1` = auto Metal on Mac) |
-| `LOCAL_N_THREADS` | Optional | CPU threads for llama.cpp (default: `2`) |
+| `FIREWORKS_API_KEY` | Yes (grading) | API key — injected by harness lúc chấm |
+| `FIREWORKS_BASE_URL` | Yes (grading) | Proxy URL cho token counting — harness inject |
+| `ALLOWED_MODELS` | Yes (grading) | Comma-separated model IDs — harness inject |
+| `LOCAL_MODEL_PATH` | Optional | Đường dẫn GGUF (default: `models/qwen2.5-1.5b-instruct-q4_k_m.gguf`) |
+| `LOCAL_N_GPU_LAYERS` | Optional | GPU layers (`0` = CPU-only, `-1` = auto Metal trên Mac) |
+| `LOCAL_N_THREADS` | Optional | CPU threads (default: `2`) |
 | `LOCAL_N_CTX` | Optional | Context window size (default: `2048`) |
-| `INPUT_PATH` | Runtime | Path to input `tasks.json` (default: `/input/tasks.json`) |
-| `OUTPUT_PATH` | Runtime | Path to write `results.json` (default: `/output/results.json`) |
+| `INPUT_PATH` | Runtime | Path đọc `tasks.json` (default: `/input/tasks.json`) |
+| `OUTPUT_PATH` | Runtime | Path ghi `results.json` (default: `/output/results.json`) |
 
-> **Security**: Never commit `.env` to git. It is already in `.gitignore`.
+> **Lưu ý:** Harness sẽ inject `FIREWORKS_API_KEY`, `FIREWORKS_BASE_URL`, `ALLOWED_MODELS` lúc chấm — không cần hardcode trong image.
 
 ---
 
 ## Grading Constraints
 
-| Constraint | Limit | Our Approach |
+| Constraint | Limit | Approach |
 |---|---|---|
-| RAM | 4 GB | SLM uses ~1.1 GB; total peak ~2.0 GB ✅ |
-| CPUs | 2 vCPUs | `n_threads=2` in llama.cpp |
-| Image size | 10 GB compressed | ~1.1–1.5 GB estimated ✅ |
-| Runtime | 10 minutes | Watchdog fires at 570s, flushes partial results |
-| Architecture | linux/amd64 | Build with `--platform linux/amd64` |
+| RAM | 4 GB | Qwen2.5 ~1 GB + MiniLM ~200 MB ≈ ~1.5 GB total ✅ |
+| CPUs | 2 vCPUs | `n_threads=2` trong llama.cpp |
+| Image size | 10 GB compressed | ~2–3 GB estimated ✅ |
+| Runtime | 10 phút | Watchdog fires at 570s, flush partial results |
+| Architecture | linux/amd64 | Build với `--platform linux/amd64` |
 
 ---
 
@@ -251,20 +256,23 @@ docker push <your-dockerhub-username>/develarper-agent:latest
 
 ```
 Minimize: Σ (input_tokens + output_tokens) sent via FIREWORKS_BASE_URL
-Subject to: accuracy ≥ threshold (binary gate — must pass first)
+Subject to: accuracy ≥ 80% (binary gate — phải pass trước)
 ```
 
-- **Local execution = 0 Fireworks tokens** → maximize this
-- **Prompt compression** reduces tokens on every remote call
-- **Per-category `max_tokens` budgets** prevent over-generation
-- **Semantic cache** deduplicates identical/near-identical prompts
+- **Local execution = 0 Fireworks tokens** → maximize local handling
+- **Semantic classifier** (MiniLM) → routing chính xác hơn → ít misroute → ít API call thừa
+- **Prompt compression** → strip filler phrases + output suffix → giảm tokens mỗi remote call
+- **Per-category `max_tokens` budgets** → giới hạn output dài không cần thiết
+- **Semantic cache** → dedup identical/similar prompts
 
 ---
 
 ## Development Notes
 
 - **Python version**: 3.10 (Docker) / 3.11+ (host dev)
-- **Linting**: `ruff` — run `ruff check .` before committing
-- **Type checking**: `mypy` — run `mypy .`
-- **Pre-commit hooks**: `pre-commit run --all-files`
-- **No API key needed** to run unit tests and test local SLM flows
+- **Classifier**: `all-MiniLM-L6-v2` via `sentence-transformers` — zero-shot, no API calls
+- **Local SLM**: `Qwen2.5-1.5B-Instruct Q4_K_M` via `llama-cpp-python`
+- **Linting**: `ruff check .`
+- **Type checking**: `mypy .`
+- **Pre-commit**: `pre-commit run --all-files`
+- Không cần API key để chạy local SLM tasks và unit tests
