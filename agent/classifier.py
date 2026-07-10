@@ -1,145 +1,204 @@
-import re
+"""
+agent/classifier.py — Zero-Shot Semantic Classifier
+=====================================================
+Uses sentence-transformers (all-MiniLM-L6-v2) to classify prompts by cosine
+similarity against pre-computed label anchor embeddings.
 
+Design:
+  - SemanticClassifier singleton: model loaded once at first call (~1s warm-up)
+  - 6 label anchors (multiple sentences per route → mean pooled embedding)
+  - classify() is a drop-in replacement: same public signature as before
+  - Two hard structural overrides (prompt length, code block detection)
+  - Zero Fireworks API calls — runs entirely local → 0 tokens toward score
+
+Routes (constants unchanged — router.py imports these):
+  LOCAL_SENTIMENT, LOCAL_NER, LOCAL_GENERAL
+  API_MATH, API_CODE, API_LOGIC, API_LONG_CONTEXT
+"""
+
+import logging
+import re
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Route constants (imported by router.py — do NOT rename)
+# ---------------------------------------------------------------------------
 ROUTE_LOCAL_SENTIMENT = "LOCAL_SENTIMENT"
 ROUTE_LOCAL_NER = "LOCAL_NER"
-ROUTE_LOCAL_GENERAL = "LOCAL_GENERAL"  # Factual + short summaries
+ROUTE_LOCAL_GENERAL = "LOCAL_GENERAL"   # covers factual + summarization
 ROUTE_API_MATH = "API_MATH"
 ROUTE_API_CODE = "API_CODE"
 ROUTE_API_LOGIC = "API_LOGIC"
-ROUTE_API_LONG = "API_LONG_CONTEXT"  # Summarization > 6000 chars
+ROUTE_API_LONG = "API_LONG_CONTEXT"
 
-THRESHOLD = 3  # Min score to avoid fallback to LOCAL_GENERAL
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+_MODEL_NAME = "all-MiniLM-L6-v2"
+_LONG_CONTEXT_THRESHOLD = 6000          # chars; above this → API_LONG to avoid CPU OOM
+_CODE_STRUCTURAL_PATTERN = re.compile(
+    r"```|def\s+\w+\s*\(|class\s+\w+\s*:|public\s+static|console\.log"
+)
+_CODE_STRUCTURAL_SCORE_THRESHOLD = 0.35  # if code anchor score < this, hard-override wins
+
+# ---------------------------------------------------------------------------
+# Label Anchors
+# Each route has multiple representative sentences.
+# SemanticClassifier will mean-pool them into a single route embedding.
+# ---------------------------------------------------------------------------
+LABEL_ANCHORS: dict[str, list[str]] = {
+    ROUTE_LOCAL_SENTIMENT: [
+        "Classify the sentiment of this text as positive, negative, or neutral.",
+        "What is the emotional tone of this review or statement?",
+        "Analyze whether this feedback is positive, negative, or neutral.",
+        "Label the mood or feeling expressed in this sentence.",
+        "Is this opinion positive or negative? Justify your classification.",
+    ],
+    ROUTE_LOCAL_NER: [
+        "Extract all named entities: persons, organizations, locations, and dates.",
+        "Identify and label all proper nouns and entity types in this passage.",
+        "Find all mentions of people, companies, places, and times.",
+        "List the entities and their categories found in this text.",
+        "Extract named entities and classify them by type.",
+    ],
+    ROUTE_LOCAL_GENERAL: [
+        "Answer this factual knowledge question accurately.",
+        "What is the definition or explanation of this concept or term?",
+        "Summarize or condense this passage into a shorter form.",
+        "What is the capital city, historical fact, or general knowledge being asked?",
+        "Provide a brief, factual explanation of what is being asked.",
+        "Give a concise summary of the following text.",
+    ],
+    ROUTE_API_MATH: [
+        "Calculate the result of this arithmetic or mathematical problem.",
+        "Solve this word problem involving numbers, percentages, or quantities.",
+        "Compute the numerical answer to this equation or multi-step calculation.",
+        "How many items remain after these numeric operations?",
+        "Find the percentage, ratio, or projected value from these numbers.",
+    ],
+    ROUTE_API_CODE: [
+        "Write a Python function that implements this programming specification.",
+        "Debug this code snippet and fix the bug or syntax error.",
+        "Generate working code to accomplish this programming task.",
+        "This function has a bug — find the issue and provide the corrected implementation.",
+        "Write a program or script that performs the described operation.",
+    ],
+    ROUTE_API_LOGIC: [
+        "Solve this logical deduction puzzle given the stated constraints.",
+        "Determine who satisfies all conditions in this logic problem.",
+        "If these statements are true, what can be logically deduced?",
+        "Apply deductive reasoning to find the unique answer from these clues.",
+        "Given these constraints, which solution satisfies all conditions?",
+    ],
+}
 
 
+# ---------------------------------------------------------------------------
+# SemanticClassifier — Singleton
+# ---------------------------------------------------------------------------
+class SemanticClassifier:
+    """
+    Loads all-MiniLM-L6-v2 once and pre-computes mean anchor embeddings
+    for all routes. Subsequent classify() calls are pure cosine similarity.
+    """
+
+    _instance: Optional["SemanticClassifier"] = None
+
+    @classmethod
+    def get_instance(cls) -> "SemanticClassifier":
+        if cls._instance is None:
+            logger.info("Initializing SemanticClassifier (first call — loading model)…")
+            cls._instance = cls()
+            logger.info("SemanticClassifier ready.")
+        return cls._instance
+
+    def __init__(self) -> None:
+        # Import here so import errors surface early with a clear message
+        try:
+            from sentence_transformers import SentenceTransformer, util as st_util
+        except ImportError as exc:
+            raise ImportError(
+                "sentence-transformers is not installed. "
+                "Run: pip install sentence-transformers"
+            ) from exc
+
+        self._util = st_util
+        self.model = SentenceTransformer(_MODEL_NAME)
+
+        # Pre-compute mean-pooled anchor embedding per route
+        self.route_embeddings: dict = {}
+        for route, anchors in LABEL_ANCHORS.items():
+            embs = self.model.encode(anchors, convert_to_tensor=True)
+            # Mean pool across anchor sentences
+            self.route_embeddings[route] = embs.mean(dim=0)
+
+        logger.info(
+            "SemanticClassifier: pre-computed embeddings for %d routes.",
+            len(self.route_embeddings),
+        )
+
+    def classify(self, prompt: str) -> str:
+        """Return the best-matching route string for the given prompt."""
+        prompt_emb = self.model.encode(prompt, convert_to_tensor=True)
+
+        scores: dict[str, float] = {
+            route: float(self._util.cos_sim(prompt_emb, anchor_emb))
+            for route, anchor_emb in self.route_embeddings.items()
+        }
+
+        best = max(scores, key=lambda k: scores[k])
+        logger.debug(
+            "SemanticClassifier scores: %s → best=%s",
+            {r: f"{s:.3f}" for r, s in scores.items()},
+            best,
+        )
+        return best
+
+    def get_score(self, prompt: str, route: str) -> float:
+        """Return cosine similarity score for a specific route (used by hard overrides)."""
+        prompt_emb = self.model.encode(prompt, convert_to_tensor=True)
+        return float(self._util.cos_sim(prompt_emb, self.route_embeddings[route]))
+
+
+# ---------------------------------------------------------------------------
+# Public API — drop-in replacement for the old classify()
+# ---------------------------------------------------------------------------
 def classify(prompt: str) -> str:
-    # 1. Fallback for large contexts to prevent local CPU OOM/Timeout
-    if len(prompt) > 6000:
+    """
+    Classify a prompt into one of the 6 routing destinations.
+
+    Override order:
+      1. Long context (> 6000 chars)        → ROUTE_API_LONG   (prevent CPU OOM)
+      2. Structural code markers detected    → ROUTE_API_CODE   (unless embedding
+         already strongly agrees with code)
+      3. Semantic embedding (cosine sim)     → winning route
+
+    Returns one of the ROUTE_* constants.
+    """
+    # --- Override 1: Long context ---
+    if len(prompt) > _LONG_CONTEXT_THRESHOLD:
+        logger.debug("Classifier: long context (%d chars) → %s", len(prompt), ROUTE_API_LONG)
         return ROUTE_API_LONG
 
-    p = prompt.lower()
+    classifier = SemanticClassifier.get_instance()
 
-    # Initialize score board
-    scores = {
-        ROUTE_API_MATH: 0,
-        ROUTE_API_CODE: 0,
-        ROUTE_API_LOGIC: 0,
-        ROUTE_LOCAL_SENTIMENT: 0,
-        ROUTE_LOCAL_NER: 0,
-        ROUTE_LOCAL_GENERAL: 0,
-    }
+    # --- Override 2: Structural code markers ---
+    if _CODE_STRUCTURAL_PATTERN.search(prompt):
+        code_score = classifier.get_score(prompt, ROUTE_API_CODE)
+        if code_score < _CODE_STRUCTURAL_SCORE_THRESHOLD:
+            # Structural signal is strong but embedding doesn't agree → trust structure
+            logger.debug(
+                "Classifier: structural code override (embedding code score=%.3f < %.2f) → %s",
+                code_score,
+                _CODE_STRUCTURAL_SCORE_THRESHOLD,
+                ROUTE_API_CODE,
+            )
+            return ROUTE_API_CODE
+        # else: embedding already leans toward code anyway, fall through to embedding
 
-    # 2. Structural Signatures (High Confidence)
-    # Match equations e.g., "45 * 12", "x = 5"
-    if re.search(r"\d+\s*[\+\-\*\/\^=]\s*\d+", p):
-        scores[ROUTE_API_MATH] += 5
-
-    # Match markdown code blocks or common code structures
-    if re.search(r"```|def \w+\(|class \w+:|\bpublic static\b|\bconsole\.log\b", prompt):
-        scores[ROUTE_API_CODE] += 6
-
-    # JSON schema requests
-    if re.search(r"output.*json|format.*json|```json", p):
-        scores[ROUTE_LOCAL_NER] += 2
-        scores[ROUTE_LOCAL_SENTIMENT] += 1
-
-    # 3. Weighted Keyword Dictionary (Using Word Boundaries \b to avoid partial matches)
-    keywords = {
-        ROUTE_API_MATH: {
-            r"\bcalculate\b": 3,
-            r"\bequation\b": 4,
-            r"\bpercentage\b": 3,
-            r"\bsolve for\b": 5,
-            r"\bword problem\b": 4,
-            r"\bderivative\b": 5,
-            r"\bhow many\b": 2,
-            r"\bsum of\b": 3,
-            r"\bintegral\b": 5,
-            r"\barithmetic\b": 4,
-            r"\bmultiply\b": 3,
-            r"\bdivide\b": 3,
-        },
-        ROUTE_API_CODE: {
-            r"\bdebug\b": 4,
-            r"\bsyntax error\b": 5,
-            r"\bcompile\b": 4,
-            r"\brefactor\b": 4,
-            r"\bscript\b": 3,
-            r"\bfunction\b": 2,
-            r"\bgenerate.*code\b": 5,
-            r"\bwrite.*program\b": 4,
-            r"\bfix.*bug\b": 5,
-            r"\bimport\b": 2,
-            r"\bpython\b": 3,
-            r"\bcode\b": 2,
-            r"\bwrite a\b": 1,
-            r"\bprogram\b": 2,
-        },
-        ROUTE_API_LOGIC: {
-            r"\bconstraints?\b": 4,
-            r"\bpuzzles?\b": 4,
-            r"\briddles?\b": 4,
-            r"\bmust satisfy\b": 5,
-            r"\blogic gate\b": 4,
-            r"\bdeduce\b": 4,
-            r"\bif.*then\b": 3,
-            r"\bonly if\b": 3,
-            r"\bsyllogism\b": 5,
-            r"\bif\b": 1,
-            r"\bthan\b": 2,
-            r"\btaller\b": 2,
-        },
-        ROUTE_LOCAL_SENTIMENT: {
-            r"\bsentiment\b": 5,
-            r"\bpositive or negative\b": 5,
-            r"\btone\b": 4,
-            r"\bemotion\b": 3,
-            r"\bfeel\b": 2,
-            r"\bmood\b": 3,
-            r"\bhappy or sad\b": 4,
-        },
-        ROUTE_LOCAL_NER: {
-            r"\bextract entities\b": 5,
-            r"\bnamed entity\b": 5,
-            r"\bperson.*org\b": 4,
-            r"\bidentify.*location\b": 4,
-            r"\bwho.*mentioned\b": 3,
-            r"\bextract names\b": 5,
-            r"\bnamed entit(y|ies)\b": 5,
-            r"\bextract\b": 2,
-            r"\bentit(y|ies)\b": 3,
-        },
-        ROUTE_LOCAL_GENERAL: {
-            r"\bsummarize\b": 4,
-            r"\bexplain\b": 2,
-            r"\btldr\b": 4,
-            r"\bwhat is\b": 2,
-            r"\bdefine\b": 2,
-            r"\bdescribe\b": 2,
-            r"\bcapital of\b": 3,
-            r"\bhistory of\b": 3,
-            r"\btranslate\b": 3,
-        },
-    }
-
-    # Apply weighted scores
-    for category, weights in keywords.items():
-        for pattern, weight in weights.items():
-            if re.search(pattern, p):
-                scores[category] += weight
-
-    # 4. Negative Penalties (Anti-Patterns)
-    # If it's a story or essay request, it's likely not a strict math/code problem
-    if re.search(r"\bstory\b|\bpoem\b|\bessay\b|\bwrite a letter\b", p):
-        scores[ROUTE_API_MATH] -= 5
-        scores[ROUTE_API_CODE] -= 3
-        scores[ROUTE_API_LOGIC] -= 5
-        scores[ROUTE_LOCAL_GENERAL] += 3
-
-    # 5. Determine the winner
-    best_category = max(scores, key=lambda k: scores[k])
-    max_score = scores[best_category]
-
-    if max_score < THRESHOLD:
-        return ROUTE_LOCAL_GENERAL
-
-    return best_category
+    # --- Primary: Embedding-based classification ---
+    route = classifier.classify(prompt)
+    logger.debug("Classifier: embedding → %s", route)
+    return route

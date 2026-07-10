@@ -11,11 +11,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt /app/
 
-# Install deps + llama-cpp-python via precompiled CPU wheel (avoids C++ compilation)
+# Step 1: Install CPU-only torch first to avoid pulling 2.5 GB CUDA wheels
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir llama-cpp-python \
+    pip install --no-cache-dir torch \
+        --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Step 2: Install remaining deps (sentence-transformers will reuse the torch above)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Step 3: Install llama-cpp-python via precompiled CPU wheel (avoids C++ compilation)
+RUN pip install --no-cache-dir llama-cpp-python \
         --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+# Step 4: Pre-cache sentence-transformer model weights at build time
+# Prevents runtime download within the 10-minute container limit
+RUN python -c "
+from sentence_transformers import SentenceTransformer
+print('Pre-caching all-MiniLM-L6-v2...')
+SentenceTransformer('all-MiniLM-L6-v2')
+print('Model cached successfully.')
+"
 
 # Bundle GGUF model weights (~986 MB)
 # Make sure to run scripts/download_model.sh before building

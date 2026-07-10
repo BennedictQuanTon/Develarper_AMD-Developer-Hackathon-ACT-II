@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "practice-01",
+    "answer": "The capital of Australia is Canberra, and it is near the Great Barrier Reef."
+  },
+  {
+    "task_id": "practice-02",
+    "answer": "__ESCALATE__"
+  },
+  {
+    "task_id": "practice-03",
+    "answer": "Negative"
+  },
+  {
+    "task_id": "practice-04",
+    "answer": "Artificial intelligence has rapidly transformed various industries, improving tasks and decision-making, but raises concerns about privacy, bias, job displacement, and regulation."
+  },
+  {
+    "task_id": "practice-05",
+    "answer": "[\n  {\"entity\": \"Maria Sanchez\", \"type\": \"Person\"},\n  {\"entity\": \"Fireworks AI\", \"type\": \"Organization\"},\n  {\"entity\": \"Berlin\", \"type\": \"Location\"}\n]"
+  },
+  {
+    "task_id": "practice-06",
+    "answer": "The function `get_max(nums)` is intended to return the maximum value from a list of numbers. However, the current implementation returns the first element of the list, which is not necessarily the maximum value. To fix this, we should return the last element of the list, which is the maximum value in a sorted list.\n\nHere is the corrected code:\n\n```python\ndef get_max(nums):\n    return max(nums)\n```\n\nThis code uses the built-in `max()` function to find the maximum value in the list `nums`."
+  },
+  {
+    "task_id": "practice-07",
+    "answer": "To solve this logic puzzle, let's break it down step-by-step:\n\n1. **Identify the constraints:**\n   - Sam does not own the bird.\n   - Jo owns the dog.\n   - Each person owns a different pet: cat, dog, bird.\n\n2. **Deduce the information:**\n   - Since Jo owns the dog, we know that Jo cannot own the cat or the bird.\n   - Sam does not own the bird, so Sam must own either the cat or the dog.\n   - Lee must own the bird because the only pet left is the bird.\n\n3. **Deduce the final conclusion:**\n   - Since Lee owns the bird, the remaining pets are the cat and the dog.\n   - Since Jo owns the dog, the remaining pet is the cat.\n\nTherefore, Lee owns the cat."
+  },
+  {
+    "task_id": "practice-08",
+    "answer": "```python\ndef second_largest(numbers):\n    # Sort the list in descending order\n    sorted_numbers = sorted(numbers, reverse=True)\n    # Return the second element (index 1) which is the second-largest number\n    return sorted_numbers[1]\n\n# Example usage\nnumbers = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]\nprint(second_largest(numbers))  # Output: 70\n```"
+  }
+]
