@@ -42,8 +42,8 @@ ALLOWED_MODELS = DynamicAllowedModels()
 # Priority preferences per category — first matching model in ALLOWED_MODELS wins
 CATEGORY_MODEL_PREFERENCE: dict[str, list[str]] = {
     "API_CODE": ["kimi-k2p7-code", "gemma-4-31b-it"],
-    "API_MATH": ["gemma-4-31b-it", "gemma-4-31b-it-nvfp4"],
-    "API_LOGIC": ["gemma-4-31b-it", "minimax-m3"],
+    "API_MATH": ["kimi-k2p7-code", "minimax-m3"],
+    "API_LOGIC": ["kimi-k2p7-code", "minimax-m3"],
     "API_LONG_CONTEXT": ["gemma-4-26b-a4b-it", "gemma-4-31b-it-nvfp4"],
 }
 
@@ -61,8 +61,8 @@ _FILLER_RE = re.compile(
 
 _OUTPUT_SUFFIX: dict[str, str] = {
     "API_CODE": " Return ONLY raw code. No markdown, no explanation.",
-    "API_MATH": " Output ONLY the final numeric answer.",
-    "API_LOGIC": " Output ONLY the final answer.",
+    "API_MATH": "",  # Handled natively in CoT system prompt
+    "API_LOGIC": "", # Handled natively in Direct system prompt
     "API_LONG_CONTEXT": " Summarize in 3 sentences max.",
 }
 
@@ -147,7 +147,7 @@ class RemoteLLMEngine:
         }
 
         # Dynamically switch between Chat Completions and raw Completions
-        is_chat = "-it" in model_name.lower()
+        is_chat = any(x in model_name.lower() for x in ["-it", "kimi", "minimax"])
         endpoint = f"{self.base_url}/chat/completions" if is_chat else f"{self.base_url}/completions"
 
         if is_chat:

@@ -13,7 +13,7 @@ class LocalSLMEngine:
     @classmethod
     def get_instance(cls) -> "LocalSLMEngine":
         if cls._instance is None:
-            model_path = os.environ.get("LOCAL_MODEL_PATH", "models/qwen2.5-1.5b-instruct-q4_k_m.gguf")
+            model_path = os.environ.get("LOCAL_MODEL_PATH", "models/qwen2.5-3b-instruct-q4_k_m.gguf")
             cls._instance = cls(model_path=model_path)
         return cls._instance
 
