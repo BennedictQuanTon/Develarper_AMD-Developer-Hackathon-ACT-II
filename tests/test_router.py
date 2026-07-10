@@ -140,24 +140,26 @@ async def test_route_api_logic() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Escalation: local sentiment fails → remote fallback
+# Local sentiment: unrecognised output → 'Neutral' locally, zero remote calls
+# (PI-DEV-009: __ESCALATE__ path removed from SentimentHandler)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_sentiment_escalation() -> None:
+async def test_sentiment_unknown_output_defaults_neutral() -> None:
+    """When the local SLM returns an unrecognised string, SentimentHandler must
+    default to 'Neutral' without touching the remote API."""
     cache = SemanticCache()
     with (
-        patch("handlers.factual.LocalSLMEngine.get_instance"),
-        patch("handlers.sentiment.LocalSLMEngine.get_instance") as mock_slm,
-        patch("handlers.ner.LocalSLMEngine.get_instance"),
-        patch("handlers.summarization.LocalSLMEngine.get_instance"),
+        patch("engines.local_slm.LocalSLMEngine.get_instance") as mock_slm,
+        patch("agent.router.classify", return_value="LOCAL_SENTIMENT"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock) as mock_remote,
     ):
-        # Local SLM returns bad/ambiguous output → escalate
         fake_engine = MagicMock()
         fake_engine.generate.return_value = "I'm not sure about the emotion here."
         mock_slm.return_value = fake_engine
-        mock_remote.return_value = "Neutral"
+        mock_remote.return_value = "should not be reached"
+
         router = AgentRouter(cache=cache)
         result = await router.route("esc1", "What is the sentiment of this review?")
-        mock_remote.assert_called_once()
+
+        mock_remote.assert_not_called()
         assert result == "Neutral"
