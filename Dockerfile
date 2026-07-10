@@ -1,9 +1,15 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Build for AMD64 (hackathon requirement)
 # Local build: docker buildx build --platform linux/amd64 -t <username>/develarper-agent:latest .
 
 WORKDIR /app
+
+# Copy the uv binary from the official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Enable system-wide package installation for uv
+ENV UV_SYSTEM_PYTHON=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -12,15 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /app/
 
 # Step 1: Install CPU-only torch first to avoid pulling 2.5 GB CUDA wheels
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch \
-        --extra-index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install torch \
+        --index-url https://download.pytorch.org/whl/cpu
 
 # Step 2: Install remaining deps (sentence-transformers will reuse the torch above)
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install -r requirements.txt
 
 # Step 3: Install llama-cpp-python via precompiled CPU wheel (avoids C++ compilation)
-RUN pip install --no-cache-dir llama-cpp-python \
+RUN uv pip install llama-cpp-python \
         --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
 # Step 4: Pre-cache sentence-transformer model weights at build time
