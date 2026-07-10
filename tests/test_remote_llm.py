@@ -70,11 +70,27 @@ def test_model_selection_long_context() -> None:
 async def test_remote_llm_generate_mocked() -> None:
     engine = RemoteLLMEngine()
     mock_response = {"choices": [{"message": {"content": "42"}}]}
-    with patch("aiohttp.ClientSession.post") as mock_post:
-        mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.json = AsyncMock(return_value=mock_response)
-        mock_post.return_value.__aenter__.return_value = mock_resp
+    with patch("engines.remote_llm.ALLOWED_MODELS", ["gemma-4-31b-it"]):
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_resp = AsyncMock()
+            mock_resp.status = 200
+            mock_resp.json = AsyncMock(return_value=mock_response)
+            mock_post.return_value.__aenter__.return_value = mock_resp
 
-        result = await engine.generate("What is 6 * 7?", "API_MATH")
-        assert result == "42"
+            result = await engine.generate("What is 6 * 7?", "API_MATH")
+            assert result == "42"
+
+
+@pytest.mark.asyncio
+async def test_remote_llm_generate_completions_mocked() -> None:
+    engine = RemoteLLMEngine()
+    mock_response = {"choices": [{"text": "99"}]}
+    with patch("engines.remote_llm.select_remote_model", return_value="minimax-m3"):
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_resp = AsyncMock()
+            mock_resp.status = 200
+            mock_resp.json = AsyncMock(return_value=mock_response)
+            mock_post.return_value.__aenter__.return_value = mock_resp
+
+            result = await engine.generate("Solve logic riddle", "API_LOGIC")
+            assert result == "99"

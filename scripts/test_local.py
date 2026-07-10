@@ -8,10 +8,11 @@ Cách chạy:
     PYTHONPATH=. python scripts/test_local.py
     PYTHONPATH=. python scripts/test_local.py tests/fixtures/sample_tasks.json
 """
+
 import json
+import logging
 import os
 import sys
-import logging
 import time
 
 # Suppress noisy logs — chỉ show ERROR
@@ -24,6 +25,7 @@ os.environ.setdefault("LOCAL_N_GPU_LAYERS", "0")
 # Load .env nếu có
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except Exception:
     pass
@@ -31,10 +33,10 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Import project modules
 # ---------------------------------------------------------------------------
-from agent.classifier import classify, ROUTE_API_CODE, ROUTE_API_LOGIC, ROUTE_API_MATH, ROUTE_API_LONG
-from agent.ast_eval import evaluate_math_expression
-from engines.local_slm import LocalSLMEngine
-from handlers._base import load_prompt_template
+from agent.ast_eval import evaluate_math_expression  # noqa: E402
+from agent.classifier import ROUTE_API_CODE, ROUTE_API_LOGIC, ROUTE_API_MATH, classify  # noqa: E402
+from engines.local_slm import LocalSLMEngine  # noqa: E402
+from handlers._base import load_prompt_template  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Input file
@@ -69,14 +71,15 @@ print()
 # Load system prompts
 # ---------------------------------------------------------------------------
 prompts = {
-    "factual":       load_prompt_template("factual.txt"),
-    "sentiment":     load_prompt_template("sentiment.txt"),
-    "ner":           load_prompt_template("ner.txt"),
+    "factual": load_prompt_template("factual.txt"),
+    "sentiment": load_prompt_template("sentiment.txt"),
+    "ner": load_prompt_template("ner.txt"),
     "summarization": load_prompt_template("summarization.txt"),
-    "code":          load_prompt_template("remote_code.txt"),
-    "math":          load_prompt_template("remote_math.txt"),
-    "logic":         load_prompt_template("remote_logic.txt"),
+    "code": load_prompt_template("remote_code.txt"),
+    "math": load_prompt_template("remote_math.txt"),
+    "logic": load_prompt_template("remote_logic.txt"),
 }
+
 
 def count_tokens(text: str) -> int:
     """Đếm token chính xác dùng llama.cpp tokenizer của Qwen2.5."""
@@ -86,22 +89,23 @@ def count_tokens(text: str) -> int:
         # Fallback: ước tính (~1.3 tokens per word)
         return int(len(text.split()) * 1.3)
 
+
 # ---------------------------------------------------------------------------
 # Run tasks
 # ---------------------------------------------------------------------------
 results = []
-total_input_tokens  = 0
+total_input_tokens = 0
 total_output_tokens = 0
 
 for i, task in enumerate(tasks, 1):
-    tid    = task["task_id"]
+    tid = task["task_id"]
     prompt = task["prompt"]
     t_start = time.time()
 
     # --- Layer 1b: AST deterministic math ---
     ast_result = evaluate_math_expression(prompt)
     if ast_result:
-        route  = "AST_EVAL (0 tokens)"
+        route = "AST_EVAL (0 tokens)"
         answer = ast_result
         in_tok = 0
         out_tok = 0
@@ -110,24 +114,23 @@ for i, task in enumerate(tasks, 1):
 
         # Chọn system prompt phù hợp
         if route == "LOCAL_SENTIMENT":
-            sys_p  = prompts["sentiment"]
-            max_t  = 20
+            sys_p = prompts["sentiment"]
+            max_t = 20
         elif route == "LOCAL_NER":
-            sys_p  = prompts["ner"]
-            max_t  = 300
+            sys_p = prompts["ner"]
+            max_t = 300
         elif route == ROUTE_API_MATH:
-            sys_p  = prompts["math"]
-            max_t  = 150
+            sys_p = prompts["math"]
+            max_t = 150
         elif route == ROUTE_API_CODE:
-            sys_p  = prompts["code"]
-            max_t  = 400
+            sys_p = prompts["code"]
+            max_t = 400
         elif route == ROUTE_API_LOGIC:
-            sys_p  = prompts["logic"]
-            max_t  = 200
+            sys_p = prompts["logic"]
+            max_t = 200
         else:  # LOCAL_GENERAL, API_LONG, fallback
             p_lower = prompt.lower()
-            if any(w in p_lower for w in ["summarize", "summary", "tldr",
-                                           "in exactly one sentence", "condense"]):
+            if any(w in p_lower for w in ["summarize", "summary", "tldr", "in exactly one sentence", "condense"]):
                 sys_p = prompts["summarization"]
                 max_t = 250
             else:
@@ -138,11 +141,11 @@ for i, task in enumerate(tasks, 1):
         formatted = f"<|im_start|>system\n{sys_p}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
         in_tok = count_tokens(formatted)
 
-        answer  = engine.generate(prompt, sys_p, max_tokens=max_t)
+        answer = engine.generate(prompt, sys_p, max_tokens=max_t)
         out_tok = count_tokens(answer)
 
     elapsed = time.time() - t_start
-    total_input_tokens  += in_tok
+    total_input_tokens += in_tok
     total_output_tokens += out_tok
 
     results.append({"task_id": tid, "answer": answer})
@@ -150,8 +153,7 @@ for i, task in enumerate(tasks, 1):
     # --- Print kết quả ---
     print(f"{'─' * 70}")
     print(f"[{i}/8] {tid}  │  route: {route}  │  ⏱ {elapsed:.1f}s")
-    print(f"       📥 input: {in_tok} tokens   📤 output: {out_tok} tokens   "
-          f"📊 total: {in_tok + out_tok} tokens")
+    print(f"       📥 input: {in_tok} tokens   📤 output: {out_tok} tokens   " f"📊 total: {in_tok + out_tok} tokens")
     print(f"PROMPT : {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     print(f"ANSWER : {answer[:200]}{'...' if len(answer) > 200 else ''}")
 

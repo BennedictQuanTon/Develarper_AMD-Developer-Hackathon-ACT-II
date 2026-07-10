@@ -18,7 +18,7 @@ Routes (constants unchanged — router.py imports these):
 
 import logging
 import re
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 ROUTE_LOCAL_SENTIMENT = "LOCAL_SENTIMENT"
 ROUTE_LOCAL_NER = "LOCAL_NER"
-ROUTE_LOCAL_GENERAL = "LOCAL_GENERAL"   # covers factual + summarization
+ROUTE_LOCAL_GENERAL = "LOCAL_GENERAL"  # covers factual + summarization
 ROUTE_API_MATH = "API_MATH"
 ROUTE_API_CODE = "API_CODE"
 ROUTE_API_LOGIC = "API_LOGIC"
@@ -37,10 +37,8 @@ ROUTE_API_LONG = "API_LONG_CONTEXT"
 # Configuration
 # ---------------------------------------------------------------------------
 _MODEL_NAME = "all-MiniLM-L6-v2"
-_LONG_CONTEXT_THRESHOLD = 6000          # chars; above this → API_LONG to avoid CPU OOM
-_CODE_STRUCTURAL_PATTERN = re.compile(
-    r"```|def\s+\w+\s*\(|class\s+\w+\s*:|public\s+static|console\.log"
-)
+_LONG_CONTEXT_THRESHOLD = 6000  # chars; above this → API_LONG to avoid CPU OOM
+_CODE_STRUCTURAL_PATTERN = re.compile(r"```|def\s+\w+\s*\(|class\s+\w+\s*:|public\s+static|console\.log")
 _CODE_STRUCTURAL_SCORE_THRESHOLD = 0.35  # if code anchor score < this, hard-override wins
 
 # ---------------------------------------------------------------------------
@@ -117,18 +115,16 @@ class SemanticClassifier:
     def __init__(self) -> None:
         # Import here so import errors surface early with a clear message
         try:
-            from sentence_transformers import SentenceTransformer, util as st_util
+            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import util as st_util
         except ImportError as exc:
-            raise ImportError(
-                "sentence-transformers is not installed. "
-                "Run: pip install sentence-transformers"
-            ) from exc
+            raise ImportError("sentence-transformers is not installed. " "Run: pip install sentence-transformers") from exc
 
         self._util = st_util
         self.model = SentenceTransformer(_MODEL_NAME)
 
         # Pre-compute mean-pooled anchor embedding per route
-        self.route_embeddings: dict = {}
+        self.route_embeddings: dict[str, Any] = {}
         for route, anchors in LABEL_ANCHORS.items():
             embs = self.model.encode(anchors, convert_to_tensor=True)
             # Mean pool across anchor sentences
@@ -143,10 +139,7 @@ class SemanticClassifier:
         """Return the best-matching route string for the given prompt."""
         prompt_emb = self.model.encode(prompt, convert_to_tensor=True)
 
-        scores: dict[str, float] = {
-            route: float(self._util.cos_sim(prompt_emb, anchor_emb))
-            for route, anchor_emb in self.route_embeddings.items()
-        }
+        scores: dict[str, float] = {route: float(self._util.cos_sim(prompt_emb, anchor_emb)) for route, anchor_emb in self.route_embeddings.items()}
 
         best = max(scores, key=lambda k: scores[k])
         logger.debug(
@@ -183,6 +176,18 @@ def classify(prompt: str) -> str:
         return ROUTE_API_LONG
 
     classifier = SemanticClassifier.get_instance()
+
+    p = prompt.lower()
+
+    # --- Override: Creative writing / story fallback ---
+    if re.search(r"\bstory\b|\bpoem\b|\bessay\b|\bwrite a letter\b", p):
+        logger.debug("Classifier: creative writing override → %s", ROUTE_LOCAL_GENERAL)
+        return ROUTE_LOCAL_GENERAL
+
+    # --- Override: Explicit code / script generation ---
+    if re.search(r"\bpython script\b|\bwrite code\b|\bcode snippet\b", p):
+        logger.debug("Classifier: code script override → %s", ROUTE_API_CODE)
+        return ROUTE_API_CODE
 
     # --- Override 2: Structural code markers ---
     if _CODE_STRUCTURAL_PATTERN.search(prompt):
