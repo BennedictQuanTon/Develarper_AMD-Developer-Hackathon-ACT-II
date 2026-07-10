@@ -64,7 +64,25 @@ graph TD
 
 ---
 
-## 3. TẠI SAO TỐC ĐỘ XỬ LÝ (LATENCY) LẠI CỰC KỲ NHANH?
+## 3. CƠ CHẾ PROMPTING & CHIẾN LƯỢC SUY LUẬN (PROMPTING & REASONING STRATEGY)
+
+Cả hai nhóm tác vụ đều sử dụng chung một chiến lược prompting tối giản nhằm tối ưu hóa chi phí token và tốc độ phản hồi:
+
+### A. Kỹ thuật Zero-shot Prompting
+* Không sử dụng Few-shot ví dụ mẫu trong prompt của cả hai category.
+* Hệ thống truyền trực tiếp yêu cầu xử lý và các ràng buộc đầu ra cho mô hình cục bộ dưới dạng Zero-shot. Điều này giúp giảm số lượng Input Token xuống mức thấp nhất có thể.
+
+### B. Không sử dụng Chain-of-Thought (CoT)
+* Prompt cấu hình bắt buộc mô hình sinh câu trả lời trực tiếp, ngắn gọn (Factual tối đa 1-2 câu, Summarization dưới 3 câu) và nghiêm cấm viết lời mở đầu, giải thích hay suy luận từng bước.
+* Việc bỏ qua CoT giúp tiết kiệm một lượng lớn Output Token (vốn là yếu tố chấm điểm chính của cuộc thi) và tăng tốc độ xử lý lên nhiều lần.
+
+### C. Cơ chế Tự động Chuyển tiếp (Self-Escalation) trong Prompt
+* **Factual Knowledge:** System prompt tích hợp điều kiện tự đánh giá tri thức. Nếu mô hình cục bộ không chắc chắn hoặc câu hỏi cần suy luận phức tạp, nó sẽ tự động trả về từ khóa `__ESCALATE__` để router chuyển tác vụ lên Remote API.
+* **Text Summarization:** Tích hợp bộ đếm từ trực tiếp ở tầng code. Nếu văn bản $\ge 1200$ từ, hệ thống chủ động trả về `__ESCALATE__` trước khi gọi mô hình, bảo vệ mô hình cục bộ khỏi việc tràn ngữ cảnh và đảm bảo chất lượng tóm tắt.
+
+---
+
+## 4. TẠI SAO TỐC ĐỘ XỬ LÝ (LATENCY) LẠI CỰC KỲ NHANH?
 
 Độ trễ trung bình của hệ thống đạt mức ấn tượng **505.1 ms** (nửa giây cho mỗi yêu cầu) nhờ sự kết hợp của 3 yếu tố kỹ thuật then chốt:
 
@@ -84,7 +102,7 @@ graph TD
 
 ---
 
-## 4. NGUYÊN NHÂN GÂY RA CÁC TRƯỜNG HỢP THẤT BẠI (FAIL)
+## 5. NGUYÊN NHÂN GÂY RA CÁC TRƯỜNG HỢP THẤT BẠI (FAIL)
 
 Dù đạt độ chính xác rất cao (93.00%), hệ thống vẫn ghi nhận một vài ca bị đánh giá là **không chính xác (Fail)** do các nguyên nhân sau:
 
