@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Build for AMD64 (hackathon requirement)
 # Local build: docker buildx build --platform linux/amd64 -t <username>/develarper-agent:latest .
