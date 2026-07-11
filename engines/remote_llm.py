@@ -65,7 +65,7 @@ _FILLER_RE = re.compile(
 _OUTPUT_SUFFIX: dict[str, str] = {
     "API_CODE": " Return ONLY raw code. No markdown, no explanation.",
     "API_MATH": "",  # Handled natively in CoT system prompt
-    "API_LOGIC": "", # Handled natively in Direct system prompt
+    "API_LOGIC": "",  # Handled natively in Direct system prompt
     "API_LONG_CONTEXT": " Summarize in 3 sentences max.",
 }
 

@@ -54,7 +54,6 @@ def test_model_selection_logic_prefers_kimi_then_minimax() -> None:
         assert select_remote_model("API_LOGIC") == "kimi-k2p7-code"
 
 
-
 def test_model_selection_fallback_empty() -> None:
     with patch("engines.remote_llm.ALLOWED_MODELS", []):
         assert select_remote_model("API_MATH") == "gemma-4-31b-it"
@@ -96,4 +95,3 @@ async def test_remote_llm_generate_completions_mocked() -> None:
 
             result = await engine.generate("Solve logic riddle", "API_LOGIC")
             assert result == "99"
-
