@@ -39,7 +39,7 @@ ROUTES_MAP = [
     ROUTE_API_LOGIC,
 ]
 
-_MODEL_NAME = "all-MiniLM-L6-v2"
+_MODEL_NAME = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "all-MiniLM-L6-v2")
 _LONG_CONTEXT_THRESHOLD = 6000  # chars; above this → API_LONG to avoid CPU OOM
 WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "supervised_model.pt")
 

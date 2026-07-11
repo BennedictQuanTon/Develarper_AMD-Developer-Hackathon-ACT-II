@@ -3,16 +3,16 @@ set -e
 
 mkdir -p models
 
-MODEL_PATH="models/qwen2.5-3b-instruct-q4_k_m.gguf"
+MODEL_PATH="models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 
 if [ ! -f "$MODEL_PATH" ]; then
-    echo "Downloading Qwen2.5-3B-Instruct-GGUF (Q4_K_M)..."
+    echo "Downloading Qwen2.5-1.5B-Instruct-GGUF (Q4_K_M)..."
     if ! command -v hf &> /dev/null; then
         echo "Using HuggingFace CLI..."
-        hf download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q4_k_m.gguf --local-dir models --local-dir-use-symlinks False
+        hf download Qwen/Qwen2.5-1.5B-Instruct-GGUF qwen2.5-1.5b-instruct-q4_k_m.gguf --local-dir models --local-dir-use-symlinks False
     else
         echo "HuggingFace CLI not found, falling back to curl..."
-        curl -L -o "$MODEL_PATH" "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+        curl -L -o "$MODEL_PATH" "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
     fi
     echo "Download completed."
 else

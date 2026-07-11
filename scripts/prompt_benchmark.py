@@ -27,7 +27,7 @@ from typing import Any
 logging.basicConfig(level=logging.ERROR)
 
 # Configure local engine before any project imports
-os.environ.setdefault("LOCAL_MODEL_PATH", "models/qwen2.5-3b-instruct-q4_k_m.gguf")
+os.environ.setdefault("LOCAL_MODEL_PATH", "models/qwen2.5-1.5b-instruct-q4_k_m.gguf")
 os.environ.setdefault("LOCAL_N_CTX", "2048")
 os.environ.setdefault("LOCAL_N_THREADS", "2")
 os.environ.setdefault("LOCAL_N_GPU_LAYERS", "0")
