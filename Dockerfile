@@ -30,12 +30,7 @@ RUN uv pip install llama-cpp-python \
 
 # Step 4: Pre-cache sentence-transformer model weights at build time
 # Prevents runtime download within the 10-minute container limit
-RUN python -c "
-from sentence_transformers import SentenceTransformer
-print('Pre-caching all-MiniLM-L6-v2...')
-SentenceTransformer('all-MiniLM-L6-v2')
-print('Model cached successfully.')
-"
+RUN python -c "from sentence_transformers import SentenceTransformer; print('Pre-caching...'); SentenceTransformer('all-MiniLM-L6-v2'); print('Model cached successfully.')"
 
 # Bundle GGUF model weights (~986 MB)
 # Make sure to run scripts/download_model.sh before building
@@ -61,6 +56,8 @@ ENV PYTHONUNBUFFERED=1 \
     LOCAL_MODEL_PATH=/app/models/qwen2.5-3b-instruct-q4_k_m.gguf \
     LOCAL_N_GPU_LAYERS=0 \
     LOCAL_N_THREADS=2 \
-    LOCAL_N_CTX=2048
+    LOCAL_N_CTX=2048 \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
-CMD ["python", "/app/main.py"]
+ENTRYPOINT ["/app/entrypoint.sh"]
