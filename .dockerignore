@@ -26,6 +26,7 @@ __pycache__/
 htmlcov/
 
 # Local output / temp
+output/
 output_test/
 *.tmp
 *.bak

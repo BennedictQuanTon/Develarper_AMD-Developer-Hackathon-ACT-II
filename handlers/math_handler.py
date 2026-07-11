@@ -11,26 +11,26 @@ logger = logging.getLogger(__name__)
 def extract_number(text: str) -> str:
     """Extracts numeric answer from a verbose Chain-of-Thought response."""
     text = text.strip()
-    if re.match(r'^-?\d+(?:/\d+)?(?:\.\d+)?$', text):
+    if re.match(r"^-?\d+(?:/\d+)?(?:\.\d+)?$", text):
         return text
-    
+
     # Try different pattern fallbacks
     patterns = [
-        r'ANSWER:\s*\$?\s*(-?\d+(?:/\d+)?(?:\.\d+)?)',
-        r'(?:answer|result|total|sum|area|speed|price|cost|value|average|remain|left|volume|profit|capacity|units|pieces|girls|seconds|original|radius)\s*(?:is|=|:)\s*\$?\s*(-?\d+(?:/\d+)?(?:\.\d+)?)',
-        r'\*\*(-?\d+(?:/\d+)?(?:\.\d+)?)\*\*', 
-        r'\\boxed\{(-?\d+(?:/\d+)?(?:\.\d+)?)\}', 
-        r'`(-?\d+(?:/\d+)?(?:\.\d+)?)`'
+        r"ANSWER:\s*\$?\s*(-?\d+(?:/\d+)?(?:\.\d+)?)",
+        r"(?:answer|result|total|sum|area|speed|price|cost|value|average|remain|left|volume|profit|capacity|units|pieces|girls|seconds|original|radius)\s*(?:is|=|:)\s*\$?\s*(-?\d+(?:/\d+)?(?:\.\d+)?)",
+        r"\*\*(-?\d+(?:/\d+)?(?:\.\d+)?)\*\*",
+        r"\\boxed\{(-?\d+(?:/\d+)?(?:\.\d+)?)\}",
+        r"`(-?\d+(?:/\d+)?(?:\.\d+)?)`",
     ]
     for p in patterns:
         m = re.findall(p, text, re.IGNORECASE)
         if m:
             val = m[-1] if isinstance(m[-1], str) else [x for x in m[-1] if x][-1]
-            return val
-            
+            return str(val)
+
     # Final fallback: last number in text
-    nums = re.findall(r'-?\d+(?:/\d+)?(?:\.\d+)?', text)
-    return nums[-1] if nums else text
+    nums = re.findall(r"-?\d+(?:/\d+)?(?:\.\d+)?", text)
+    return str(nums[-1]) if nums else text
 
 
 class MathHandler:

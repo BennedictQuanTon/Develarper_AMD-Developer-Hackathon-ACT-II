@@ -34,14 +34,14 @@ graph TD
     D -- Là biểu thức Toán đơn giản --> E[Tính toán trực tiếp - 0ms]
     D -- Không phải Toán đơn giản --> F{Lớp 2: Weighted Classifier}
     F -- Dự đoán Route --> G{Lớp 3 & 4: Dispatcher}
-    
+
     G -- LOCAL_GENERAL --> H{Chứa từ khóa Summarize?}
     H -- Có --> I[SummarizationHandler - Chạy Qwen 2.5 3B cục bộ]
     H -- Không --> J[FactualHandler - Chạy Qwen 2.5 3B cục bộ]
-    
+
     I --> K{Mô hình trả về __ESCALATE__?}
     J --> K
-    
+
     K -- Có (Tràn cửa sổ ngữ cảnh/lỗi) --> L[RemoteGeneralHandler - Gọi API Fireworks]
     K -- Không --> M[Lưu kết quả vào Cache & Trả về cho User]
     L --> M

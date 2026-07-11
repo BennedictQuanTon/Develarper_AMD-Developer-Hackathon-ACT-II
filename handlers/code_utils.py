@@ -10,6 +10,7 @@ Three responsibilities, all zero-token:
 import ast
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,26 @@ def classify_code_difficulty(prompt: str) -> str:
     length = len(prompt)
 
     hard_kw = (
-        "dynamic programming", "dijkstra", "graph", "tree", "trie",
-        "heap", "linked list", "lru", "backtracking", "topological",
-        "n-queens", "knapsack", "memoization", "bfs", "dfs",
-        "binary search tree", "cycle detection", "floyd",
-        "strongly connected", "minimax",
+        "dynamic programming",
+        "dijkstra",
+        "graph",
+        "tree",
+        "trie",
+        "heap",
+        "linked list",
+        "lru",
+        "backtracking",
+        "topological",
+        "n-queens",
+        "knapsack",
+        "memoization",
+        "bfs",
+        "dfs",
+        "binary search tree",
+        "cycle detection",
+        "floyd",
+        "strongly connected",
+        "minimax",
     )
     if any(kw in low for kw in hard_kw):
         return HARD
@@ -58,22 +74,19 @@ def extract_code(text: str) -> str:
     text = text.strip()
     matches = _FENCE_RE.findall(text)
     if matches:
-        return max(matches, key=len).strip()
+        return str(max(matches, key=len)).strip()
 
     # No fences — strip leading prose until we hit a code-like line.
     lines = text.splitlines()
     for i, line in enumerate(lines):
         s = line.strip()
-        if s and (
-            s.startswith(("def ", "class ", "import ", "from ", "if __", "#"))
-            or re.match(r"^[a-zA-Z_]\w*\s*=", s)
-        ):
+        if s and (s.startswith(("def ", "class ", "import ", "from ", "if __", "#")) or re.match(r"^[a-zA-Z_]\w*\s*=", s)):
             return "\n".join(lines[i:]).strip()
 
     return text
 
 
-def validate_code(code: str) -> dict:
+def validate_code(code: str) -> dict[str, Any]:
     """Run syntax + completeness checks. Returns {is_valid, reason}."""
     if not code or not code.strip():
         return {"is_valid": False, "reason": "empty"}

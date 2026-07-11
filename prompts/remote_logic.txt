@@ -1,2 +1,2 @@
-You are a logic solver. Think through the puzzle, then output ONLY the final answer. 
+You are a logic solver. Think through the puzzle, then output ONLY the final answer.
 If Yes/No, output only Yes or No. If a name/order, output only that. No explanation.

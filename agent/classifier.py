@@ -1,8 +1,8 @@
 """
 agent/classifier.py — Supervised Neural Network Classifier
 =========================================================
-Uses sentence-transformers (all-MiniLM-L6-v2) to encode prompts into dense 
-384-dimensional embeddings, then passes them through a PyTorch classification 
+Uses sentence-transformers (all-MiniLM-L6-v2) to encode prompts into dense
+384-dimensional embeddings, then passes them through a PyTorch classification
 head to predict the optimal routing category.
 
 Routes (constants unchanged):
@@ -12,8 +12,8 @@ Routes (constants unchanged):
 
 import logging
 import os
-import re
-from typing import Optional
+from typing import Any, Optional
+
 import torch
 import torch.nn as nn
 
@@ -43,25 +43,23 @@ _MODEL_NAME = "all-MiniLM-L6-v2"
 _LONG_CONTEXT_THRESHOLD = 6000  # chars; above this → API_LONG to avoid CPU OOM
 WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "supervised_model.pt")
 
+
 class LinearClassifier(nn.Module):
     def __init__(self, input_dim: int, num_classes: int):
         super().__init__()
         # Simple MLP head: 384 -> 64 -> 6 classes
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(64, num_classes)
-        )
-        
-    def forward(self, x):
+        self.net = nn.Sequential(nn.Linear(input_dim, 64), nn.ReLU(), nn.Dropout(0.1), nn.Linear(64, num_classes))
+
+    def forward(self, x: Any) -> Any:
         return self.net(x)
+
 
 class SemanticClassifier:
     """
     Loads all-MiniLM-L6-v2 and the trained PyTorch classification head.
     Performs fast, offline inference by passing the prompt embedding through the MLP.
     """
+
     _instance: Optional["SemanticClassifier"] = None
 
     @classmethod
@@ -75,12 +73,11 @@ class SemanticClassifier:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
-            raise ImportError("sentence-transformers is required. "
-                             "Run: pip install sentence-transformers") from exc
+            raise ImportError("sentence-transformers is required. " "Run: pip install sentence-transformers") from exc
 
         self.encoder = SentenceTransformer(_MODEL_NAME)
         self.model = LinearClassifier(input_dim=384, num_classes=len(ROUTES_MAP))
-        
+
         if os.path.exists(WEIGHTS_PATH):
             logger.info(f"Loading supervised weights from {WEIGHTS_PATH}")
             self.model.load_state_dict(torch.load(WEIGHTS_PATH, map_location="cpu"))
@@ -92,33 +89,34 @@ class SemanticClassifier:
                 self._train_from_data(task_path)
             else:
                 logger.error(f"Supervised weights not found at {WEIGHTS_PATH} and no training data found. Using untrained weights.")
-                
+
         self.model.eval()
 
     def _train_from_data(self, data_path: str) -> None:
-        import torch.optim as optim
         import json
-        
+
+        import torch.optim as optim
+
         with open(data_path, encoding="utf-8") as f:
             tasks = json.load(f)
-            
+
         prompts = [t["prompt"] for t in tasks]
         labels = [ROUTES_MAP.index(t["expected_route"]) for t in tasks]
-        
+
         embeddings = self.encoder.encode(prompts, convert_to_tensor=True).cpu()
         labels_tensor = torch.tensor(labels, dtype=torch.long)
-        
+
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.AdamW(self.model.parameters(), lr=0.01, weight_decay=0.01)
-        
+
         self.model.train()
-        for epoch in range(150):
+        for _ in range(150):
             optimizer.zero_grad()
             outputs = self.model(embeddings)
             loss = criterion(outputs, labels_tensor)
             loss.backward()
             optimizer.step()
-            
+
         torch.save(self.model.state_dict(), WEIGHTS_PATH)
         logger.info(f"Successfully trained and saved new classifier weights to {WEIGHTS_PATH}!")
 
@@ -128,6 +126,7 @@ class SemanticClassifier:
             logits = self.model(prompt_emb.unsqueeze(0))
             pred_idx = int(logits.argmax(dim=1).item())
         return ROUTES_MAP[pred_idx]
+
 
 # ---------------------------------------------------------------------------
 # Public API — drop-in replacement for the old classify()
@@ -142,7 +141,7 @@ def classify(prompt: str) -> str:
         return ROUTE_API_LONG
 
     classifier = SemanticClassifier.get_instance()
-    
+
     # --- Execute Supervised PyTorch Classification ---
     route = classifier.classify(prompt)
     logger.debug("Classifier: supervised PyTorch → %s", route)

@@ -113,6 +113,7 @@ async def test_route_api_code() -> None:
         patch("handlers.sentiment.LocalSLMEngine.get_instance"),
         patch("handlers.ner.LocalSLMEngine.get_instance"),
         patch("handlers.summarization.LocalSLMEngine.get_instance"),
+        patch("handlers.code_gen.classify_code_difficulty", return_value="hard"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock) as mock_remote,
     ):
         mock_remote.return_value = "def add(a, b): return a + b"
@@ -137,7 +138,6 @@ async def test_route_api_logic() -> None:
         result = await router.route("l1", "If John is taller than Mary, and Mary is taller than Sue, is John taller than Sue?")
         mock_remote.assert_called_once()
         assert result == "Yes"
-
 
 
 # ---------------------------------------------------------------------------
