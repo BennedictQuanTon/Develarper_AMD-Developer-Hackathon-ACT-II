@@ -11,7 +11,13 @@ _FILLER_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SYSTEM_PROMPT = "Summarize the text in under 3 concise sentences. " "Output ONLY the final summary. No intro. No structural wrappers."
+_SYSTEM_PROMPT_PROSE = "Summarize the text in under 3 concise sentences. " "Output ONLY the final summary. No intro. No structural wrappers."
+
+_SYSTEM_PROMPT_BULLETS = (
+    "Summarize the text in EXACTLY 3 bullet points. "
+    "Each bullet point must be 15 words or fewer. "
+    "Start each bullet with '• '. No intro, no headers, no extra text."
+)
 
 _WORD_COUNT_THRESHOLD = 1200
 
@@ -37,14 +43,24 @@ class SummarizationHandler:
         word_count = len(cleaned.split())
         if word_count >= _WORD_COUNT_THRESHOLD:
             logger.info(
-                "SummarizationHandler: word_count=%d ≥ threshold=%d → __ESCALATE__",
+                "SummarizationHandler: word_count=%d >= threshold=%d → __ESCALATE__",
                 word_count,
                 _WORD_COUNT_THRESHOLD,
             )
             return "__ESCALATE__"
+
+        # Detect bullet-format directive in the original prompt
+        p_lower = prompt.lower()
+        if any(w in p_lower for w in ["bullet", "bullet point", "• ", "points"]):
+            system_prompt = _SYSTEM_PROMPT_BULLETS
+            max_tok = 120  # 3 bullets × ~15 words × ~1.3 tokens/word
+        else:
+            system_prompt = _SYSTEM_PROMPT_PROSE
+            max_tok = 90
+
         return self.engine.generate(
             cleaned,
-            system_prompt=_SYSTEM_PROMPT,
-            max_tokens=90,
+            system_prompt=system_prompt,
+            max_tokens=max_tok,
             temperature=0.1,
         )

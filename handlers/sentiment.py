@@ -8,10 +8,10 @@ logger = logging.getLogger(__name__)
 _VALID = {"Positive", "Negative", "Neutral"}
 
 _SYSTEM_PROMPT = (
-    "You are a zero-filler text classification engine. "
-    "Analyze the input text sentiment. Output EXACTLY one word "
-    "from these options: Positive, Negative, Neutral. "
-    "No preamble. No explanations. No markdown formatting."
+    "Classify the sentiment of the text as Positive, Negative, or Neutral. "
+    "Then provide exactly one sentence explaining your reasoning. "
+    "Format your response EXACTLY as: <LABEL>. <one sentence reason> "
+    "Example: Neutral. The packaging was damaged but the product itself works perfectly."
 )
 
 
@@ -30,16 +30,19 @@ class SentimentHandler:
         res = self.engine.generate(
             f"Text: {prompt}\nSentiment:",
             system_prompt=_SYSTEM_PROMPT,
-            max_tokens=2,
+            max_tokens=60,  # enough for "<Label>. <one-sentence reason>"
             temperature=0.0,
         )
-        # __ESCALATE__ is unreachable at max_tokens=2 (no length truncation),
-        # but guard defensively.
         if res == "__ESCALATE__":
             return "Neutral"
-        cleaned = res.strip().title()
+        cleaned = res.strip()
+        # Return the full label+reason string if it starts with a valid label
         for label in _VALID:
-            if label in cleaned:
-                return label
+            if cleaned.startswith(label):
+                return cleaned
+        # Fallback: scan for label anywhere in response (model omitted format)
+        for label in _VALID:
+            if label in cleaned.title():
+                return cleaned
         logger.info("SentimentHandler: non-standard output '%s'. Defaulting to Neutral.", res)
         return "Neutral"
