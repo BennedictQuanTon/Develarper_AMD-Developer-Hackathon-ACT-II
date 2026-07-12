@@ -6,6 +6,7 @@ requirements-dev.txt
 .env
 .env.*
 !.env.example
+pyproject.toml
 
 # Git history
 .git/
@@ -41,3 +42,7 @@ scripts/
 # Docs
 walkthrough.md
 fix_completion_plan.md
+
+# Model variants not used in production image
+# Only qwen2.5-3b-instruct-q4_k_m.gguf is bundled
+models/qwen2.5-1.5b-instruct-q4_k_m.gguf
