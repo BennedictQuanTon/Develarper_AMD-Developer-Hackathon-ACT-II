@@ -12,6 +12,7 @@ import sys
 from dotenv import load_dotenv
 
 from agent.cache import SemanticCache
+from agent.classifier import SemanticClassifier
 from agent.router import AgentRouter
 from agent.schemas import Task
 from agent.watchdog import Watchdog
@@ -27,11 +28,11 @@ logger = logging.getLogger("main")
 INPUT_PATH = os.environ.get("INPUT_PATH", "/input/tasks.json")
 OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "/output/results.json")
 
-# Global state
-_cache = SemanticCache()
-_router = AgentRouter(cache=_cache)
+# Global state — lightweight; expensive models are deferred into main()
+_cache: SemanticCache | None = None
+_router: AgentRouter | None = None
 _completed: list[dict[str, str]] = []
-_lock = asyncio.Lock()
+_lock: asyncio.Lock | None = None
 
 
 def _get_results() -> list[dict[str, str]]:
@@ -39,6 +40,7 @@ def _get_results() -> list[dict[str, str]]:
 
 
 async def _process(task: Task) -> None:
+    assert _router is not None and _lock is not None
     answer = await _router.route(task.task_id, task.prompt)
     async with _lock:
         _completed.append({"task_id": task.task_id, "answer": answer})
@@ -46,6 +48,23 @@ async def _process(task: Task) -> None:
 
 
 async def main() -> None:
+    global _cache, _router, _lock
+
+    # -----------------------------------------------------------------------
+    # Initialization block — runs INSIDE asyncio.run(), after loop is live.
+    # Guards allow tests to pre-inject mocks before calling main().
+    # -----------------------------------------------------------------------
+    if _router is None:
+        logger.info("Initializing agent components (GGUF + classifier)...")
+        _cache = SemanticCache()
+        _router = AgentRouter(cache=_cache)
+        # Pre-warm SemanticClassifier in the main thread so run_in_executor
+        # workers never race to load multiple SentenceTransformer instances.
+        SemanticClassifier.get_instance()
+        logger.info("Initialization complete — starting task processing.")
+    if _lock is None:
+        _lock = asyncio.Lock()
+
     if not os.path.exists(INPUT_PATH):
         logger.error("Input file not found: %s", INPUT_PATH)
         sys.exit(1)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -125,7 +126,13 @@ class RemoteLLMEngine:
         reraise=True,
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((aiohttp.ClientResponseError, aiohttp.ClientConnectorError)),
+        retry=retry_if_exception_type(
+            (
+                aiohttp.ClientResponseError,
+                aiohttp.ClientConnectorError,
+                asyncio.TimeoutError,
+            )
+        ),
     )
     async def generate(
         self,
@@ -176,7 +183,8 @@ class RemoteLLMEngine:
                 "temperature": temperature,
             }
 
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=20, connect=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(endpoint, headers=headers, json=payload) as response:
                 if response.status != 200:
                     text = await response.text()

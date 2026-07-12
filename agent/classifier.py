@@ -12,6 +12,7 @@ Routes (constants unchanged):
 
 import logging
 import os
+import threading
 from typing import Any, Optional
 
 import torch
@@ -61,12 +62,15 @@ class SemanticClassifier:
     """
 
     _instance: Optional["SemanticClassifier"] = None
+    _init_lock: threading.Lock = threading.Lock()  # guards concurrent thread-pool callers
 
     @classmethod
     def get_instance(cls) -> "SemanticClassifier":
         if cls._instance is None:
-            logger.info("Initializing SemanticClassifier (loading model & PyTorch head)...")
-            cls._instance = cls()
+            with cls._init_lock:  # only one thread enters at a time
+                if cls._instance is None:  # re-check inside lock (double-checked locking)
+                    logger.info("Initializing SemanticClassifier (loading model & PyTorch head)...")
+                    cls._instance = cls()
         return cls._instance
 
     def __init__(self) -> None:

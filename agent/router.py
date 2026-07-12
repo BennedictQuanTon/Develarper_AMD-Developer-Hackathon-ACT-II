@@ -4,10 +4,11 @@
     Layer 1a: Semantic Cache (0 tokens)
     Layer 1b: AST Math Evaluator (0 tokens, deterministic)
     Layer 2:  Weighted Scoring Classifier (~0ms, no model)
-    Layer 3:  Local SLM — Qwen2.5-3B via llama.cpp
+    Layer 3:  Local SLM — Qwen2.5 via llama.cpp
     Layer 4:  Remote Fireworks API (category-aware model + prompt compression)
 """
 
+import asyncio
 import logging
 
 from agent.ast_eval import evaluate_math_expression
@@ -78,9 +79,10 @@ class AgentRouter:
             return math_result
 
         # -------------------------------------------------------------------
-        # Layer 2: Weighted Classifier
+        # Layer 2: Weighted Classifier (offloaded to thread pool)
         # -------------------------------------------------------------------
-        route = classify(prompt)
+        loop = asyncio.get_running_loop()
+        route = await loop.run_in_executor(None, classify, prompt)
         logger.info("[%s] Route → %s", task_id, route)
 
         # -------------------------------------------------------------------

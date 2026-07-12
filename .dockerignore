@@ -16,6 +16,10 @@ requirements-dev.txt
 .idea/
 .vscode/
 *.swp
+.venv/
+venv/
+env/
+.agents/
 
 # Python cache
 __pycache__/
