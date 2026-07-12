@@ -78,6 +78,7 @@ async def test_route_sentiment_local() -> None:
         patch("handlers.sentiment.LocalSLMEngine.get_instance", return_value=fake_engine),
         patch("handlers.ner.LocalSLMEngine.get_instance", return_value=fake_engine),
         patch("handlers.summarization.LocalSLMEngine.get_instance", return_value=fake_engine),
+        patch("agent.router.classify", return_value="LOCAL_SENTIMENT"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock),
     ):
         router = AgentRouter(cache=cache)
@@ -95,6 +96,7 @@ async def test_route_ner_local() -> None:
         patch("handlers.sentiment.LocalSLMEngine.get_instance", return_value=fake_engine),
         patch("handlers.ner.LocalSLMEngine.get_instance", return_value=fake_engine),
         patch("handlers.summarization.LocalSLMEngine.get_instance", return_value=fake_engine),
+        patch("agent.router.classify", return_value="LOCAL_NER"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock),
     ):
         router = AgentRouter(cache=cache)
@@ -113,6 +115,7 @@ async def test_route_api_code() -> None:
         patch("handlers.sentiment.LocalSLMEngine.get_instance"),
         patch("handlers.ner.LocalSLMEngine.get_instance"),
         patch("handlers.summarization.LocalSLMEngine.get_instance"),
+        patch("agent.router.classify", return_value="API_CODE"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock) as mock_remote,
     ):
         mock_remote.return_value = "def add(a, b): return a + b"
@@ -130,6 +133,7 @@ async def test_route_api_logic() -> None:
         patch("handlers.sentiment.LocalSLMEngine.get_instance"),
         patch("handlers.ner.LocalSLMEngine.get_instance"),
         patch("handlers.summarization.LocalSLMEngine.get_instance"),
+        patch("agent.router.classify", return_value="API_LOGIC"),
         patch("engines.remote_llm.RemoteLLMEngine.generate", new_callable=AsyncMock) as mock_remote,
     ):
         mock_remote.return_value = "Yes"

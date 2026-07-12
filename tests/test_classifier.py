@@ -54,18 +54,12 @@ def test_classifier_long_context() -> None:
 
 
 def test_classifier_ambiguous_prompts() -> None:
-    # "Write Python to calculate sentiment"
-    # Code keywords: "Write Python" (python=2), "script" (script=3), structure (def/``` code search)
-    # Math: "calculate" (3)
-    # Sentiment: "sentiment" (5)
-    # Total scores: Code has 6 (from script/code/python/etc.), Sentiment has 5.
-    # Code should win!
+    # Code + sentiment keywords — LLM should pick API_CODE (writing code).
     result = classify("Write a Python script to calculate sentiment of text")
     assert result == ROUTE_API_CODE
 
 
 def test_classifier_negative_penalties() -> None:
-    # Contains a number but asks to write a story
-    # Math score is penalized by -5, general boosted by +3
+    # Story request with numbers — should not be routed to math.
     result = classify("Write a story about a boy who has 3 apples and 2 oranges")
     assert result == ROUTE_LOCAL_GENERAL

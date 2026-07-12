@@ -56,10 +56,6 @@ else
 fi
 info "Virtual environment activated ✓"
 
-# --- Install torch CPU-only first (to avoid pulling CUDA wheels ~2.5 GB) ---
-info "Installing torch CPU-only (~700 MB, this may take a few minutes)..."
-uv pip install --quiet torch --extra-index-url https://download.pytorch.org/whl/cpu
-
 # --- Install requirements.txt ---
 info "Installing dependencies from requirements.txt..."
 uv pip install --quiet -r requirements.txt
@@ -68,15 +64,6 @@ uv pip install --quiet -r requirements.txt
 info "Installing llama-cpp-python (CPU wheel)..."
 uv pip install --quiet llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-
-# --- Pre-cache sentence-transformer model ---
-info "Pre-caching sentence-transformer model (all-MiniLM-L6-v2 ~90 MB)..."
-python3 -c "
-from sentence_transformers import SentenceTransformer
-print('  Downloading all-MiniLM-L6-v2...')
-SentenceTransformer('all-MiniLM-L6-v2')
-print('  Model cached ✓')
-" 2>/dev/null || warn "Could not pre-cache model automatically. It will download on first run."
 
 # --- Download Qwen2.5-3B GGUF model ---
 info "Checking Qwen2.5-3B model weights..."

@@ -14,6 +14,7 @@ python-dotenv==1.0.1
 # Retry logic
 tenacity==8.3.0
 
-# Semantic classifier — zero-shot, runs local, 0 Fireworks tokens
-# torch (CPU-only) is installed separately in Dockerfile to avoid CUDA wheels (~2.5 GB)
-sentence-transformers>=2.7.0
+# Local LLM runtime (CPU). The classifier uses this same GGUF model — no
+# torch / sentence-transformers / embedding model required.
+# llama-cpp-python is installed separately (Dockerfile CPU wheel) to avoid
+# building from source.

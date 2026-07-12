@@ -17,19 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt /app/
 
-# Step 1: Install CPU-only torch first to avoid pulling 2.5 GB CUDA wheels
-RUN uv pip install --no-cache torch \
-        --index-url https://download.pytorch.org/whl/cpu
-
-# Step 2: Install remaining deps (sentence-transformers will reuse the torch above)
+# Install remaining deps (llama-cpp-python installed separately via CPU wheel).
+# torch + sentence-transformers were removed: classification now uses the local
+# Qwen GGUF model directly, so no embedding model / PyTorch head is needed.
 RUN uv pip install --no-cache -r requirements.txt
 
-# Step 3: Install llama-cpp-python via precompiled CPU wheel (avoids C++ compilation)
+# Install llama-cpp-python via precompiled CPU wheel (avoids C++ compilation)
 RUN uv pip install --no-cache llama-cpp-python \
         --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
-# Bundle GGUF model weights (~986 MB)
-# Make sure to run scripts/download_model.sh before building
+# Bundle GGUF model weights (~2 GB)
 COPY models/ /app/models/
 
 # System prompt templates
@@ -49,11 +46,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     INPUT_PATH=/input/tasks.json \
     OUTPUT_PATH=/output/results.json \
-    LOCAL_MODEL_PATH=/app/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+    LOCAL_MODEL_PATH=/app/models/qwen2.5-3b-instruct-q4_k_m.gguf \
     LOCAL_N_GPU_LAYERS=0 \
     LOCAL_N_THREADS=2 \
-    LOCAL_N_CTX=2048 \
-    HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
+    LOCAL_N_CTX=2048
 
 ENTRYPOINT ["/app/entrypoint.sh"]

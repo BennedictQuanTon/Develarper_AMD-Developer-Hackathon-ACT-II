@@ -20,7 +20,7 @@ Input Task
 [L1b] AST Math Evaluator              → pure expression → 0 tokens (deterministic)
     │ NOT PURE MATH
     ▼
-[L2]  Supervised PyTorch Classifier   → 0 tokens, ~9ms (all-MiniLM-L6-v2 + PyTorch MLP)
+[L2]  LLM Classifier (local Qwen)        → 0 tokens, grammar-constrained label
     │
     ├─► LOCAL_SENTIMENT / LOCAL_NER / LOCAL_GENERAL
     │       ▼
@@ -51,15 +51,13 @@ Input Task
 
 > **Local-first code strategy**: Code debugging and code generation tasks use a difficulty classifier (`code_utils.py`). Easy/medium tasks attempt Qwen2.5-3B locally first, validated with `ast.parse` + completeness checks — only falling back to the remote API if local output is invalid. Hard tasks go directly to the remote API to avoid wasting wall-clock time.
 
-### Semantic Classifier (L2)
+### LLM Classifier (L2)
 
-Layer 2 uses **`all-MiniLM-L6-v2`** (sentence-transformers) combined with a **Supervised Neural Network Head (PyTorch MLP)** for highly robust semantic classification:
-- **Embedding Generation**: Encodes the prompt into a dense 384-dimensional vector embedding (~8-10ms, CPU-only).
-- **Neural Network Head**: Passes the embedding through a trained Multi-Layer Perceptron (MLP) head (`384 -> 64 -> ReLU -> Dropout -> 6 Classes`).
-- **Consolidated Training**: Trained on a diverse combined dataset of **3,235 tasks** (covering standard, adversarial, and conversational phrasings).
-- **Accuracy**: Achieves **100.00% classification accuracy** across all task categories, including tricky inputs with overlapping keywords (e.g., historical numbers or code snippets).
-- **Efficiency**: Runs entirely local with **0 Fireworks API tokens** and extremely low memory footprint (weights are only ~100 KB).
-- **Auto-training**: If pre-trained weights are missing, the classifier automatically trains from `tests/fixtures/task.json` at startup.
+Layer 2 uses the **same local Qwen2.5-3B GGUF model** as the local handlers to pick the routing category — no separate embedding model or neural head:
+- **Grammar-constrained output**: a GBNF grammar forces the model to emit exactly one of the valid route labels (e.g. `LOCAL_SENTIMENT`, `API_CODE`). There is no free-form prose to parse, so mislabels from a stray token are impossible.
+- **Zero tokens**: runs entirely on the bundled model, 0 Fireworks API tokens.
+- **Concurrency-safe**: the classifier and the local handlers share one llama.cpp context, serialized by a lock inside `LocalSLMEngine`; `router.py` offloads every local call (classify + handlers) to worker threads so the asyncio event loop stays responsive while remote API tasks run concurrently.
+- **Long-context override**: prompts longer than 6,000 chars skip the model and route directly to `API_LONG_CONTEXT` to avoid CPU OOM.
 
 ### Remote Model Selection
 
@@ -93,8 +91,7 @@ This reduces input + output tokens on every remote call.
 │   ├── schemas.py            # Pydantic Task & Result models
 │   ├── cache.py              # SHA-256 semantic dedup cache (thread-safe)
 │   ├── ast_eval.py           # Safe deterministic math evaluator (AST whitelist)
-│   ├── classifier.py         # Supervised PyTorch classifier (all-MiniLM-L6-v2 + MLP)
-│   ├── supervised_model.pt   # Pre-trained classifier weights (~100 KB)
+│   ├── classifier.py         # LLM classifier (local Qwen, GBNF grammar-constrained)
 │   ├── router.py             # AgentRouter — orchestrates all 4 layers
 │   └── watchdog.py           # Daemon thread: fires at 570s, flushes partial output
 │
@@ -180,10 +177,8 @@ bash scripts/setup.sh
 
 Script này tự động:
 - Tạo virtual environment (`.venv`)
-- Cài `torch` CPU-only (tránh CUDA wheels 2.5 GB)
 - Cài tất cả dependencies từ `requirements.txt`
 - Cài `llama-cpp-python` (CPU wheel, không cần C++ compiler)
-- Pre-cache `all-MiniLM-L6-v2` (~90 MB)
 - Download `Qwen2.5-3B Q4_K_M` GGUF (~2 GB)
 - Tạo `.env` từ `.env.example`
 
@@ -246,7 +241,7 @@ Benchmarks 5 strategies (baseline, zero-shot strict, few-shot, chain-of-thought,
 PYTHONPATH=. pytest tests/test_ast_eval.py tests/test_cache.py \
     tests/test_remote_llm.py tests/test_router.py -v
 
-# Classifier test (requires all-MiniLM-L6-v2 + task.json)
+# Classifier test (loads local GGUF model)
 PYTHONPATH=. pytest tests/test_classifier.py -v
 
 # Local SLM test (requires GGUF model)
@@ -282,9 +277,8 @@ docker push <your-dockerhub-username>/develarper-agent:latest
 
 **Docker image features:**
 - Uses `entrypoint.sh` (loads `.env` if present, then runs `main.py`)
-- Sets `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` — all model weights are pre-cached at build time, no runtime downloads
-- Pre-caches `all-MiniLM-L6-v2` sentence-transformer during build
-- Bundles `Qwen2.5-3B Q4_K_M` GGUF (~986 MB) in `/app/models/`
+- Bundles `Qwen2.5-3B Q4_K_M` GGUF (~2 GB) in `/app/models/` — the only model needed (used for both classification and local handlers)
+- No torch / sentence-transformers / embedding model — smaller image, faster cold start
 
 ---
 
@@ -355,7 +349,7 @@ See [`tests/evaluation_report.md`](tests/evaluation_report.md) for detailed anal
 
 - **Python version**: 3.12 (Docker) / 3.11+ (host dev)
 - **Package manager**: `uv` (in Docker), `pip` (host dev)
-- **Classifier**: `all-MiniLM-L6-v2` (SentenceTransformer) + PyTorch MLP head — trained locally on 3,235 consolidated tasks (including test suite prompts)
+- **Classifier**: local Qwen2.5-3B with a GBNF grammar constraining output to one of the route labels (0 tokens, no separate embedding model / PyTorch head)
 - **Local SLM**: `Qwen2.5-3B-Instruct Q4_K_M` via `llama-cpp-python`
 - **Remote API**: `aiohttp` + `tenacity` retry (3 attempts, exponential backoff)
 - **Math prompting**: CoT with few-shot examples, handles fractions/decimals, answer extraction via regex

@@ -17,7 +17,7 @@ import time
 
 # Suppress noisy logs — chỉ show ERROR
 logging.basicConfig(level=logging.ERROR)
-os.environ.setdefault("LOCAL_MODEL_PATH", "models/qwen2.5-1.5b-instruct-q4_k_m.gguf")
+os.environ.setdefault("LOCAL_MODEL_PATH", "models/qwen2.5-3b-instruct-q4_k_m.gguf")
 os.environ.setdefault("LOCAL_N_CTX", "2048")
 os.environ.setdefault("LOCAL_N_THREADS", "2")
 os.environ.setdefault("LOCAL_N_GPU_LAYERS", "0")
@@ -60,7 +60,7 @@ print("  AMD Hackathon — Local Test Runner")
 print(f"  Input: {INPUT_FILE}")
 print("=" * 70)
 print()
-print("⏳ Đang load Qwen2.5-3B + SemanticClassifier...")
+print("⏳ Đang load Qwen2.5-3B (LLM classifier + local handlers)...")
 t0 = time.time()
 engine = LocalSLMEngine.get_instance()
 load_time = time.time() - t0

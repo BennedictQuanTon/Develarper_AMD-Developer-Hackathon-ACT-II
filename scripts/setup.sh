@@ -47,10 +47,6 @@ info "Virtual environment activated ✓"
 info "Upgrade pip..."
 pip install --quiet --upgrade pip
 
-# --- Cài torch CPU-only trước (tránh pull CUDA wheels 2.5 GB) ---
-info "Cài torch CPU-only (~700 MB, có thể mất vài phút)..."
-pip install --quiet torch --extra-index-url https://download.pytorch.org/whl/cpu
-
 # --- Cài requirements.txt ---
 info "Cài dependencies từ requirements.txt..."
 pip install --quiet -r requirements.txt
@@ -59,15 +55,6 @@ pip install --quiet -r requirements.txt
 info "Cài llama-cpp-python (CPU wheel)..."
 pip install --quiet llama-cpp-python \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-
-# --- Pre-cache sentence-transformer model ---
-info "Pre-cache sentence-transformer model (all-MiniLM-L6-v2 ~90 MB)..."
-python3 -c "
-from sentence_transformers import SentenceTransformer
-print('  Downloading all-MiniLM-L6-v2...')
-SentenceTransformer('all-MiniLM-L6-v2')
-print('  Model cached ✓')
-" 2>/dev/null
 
 # --- Download Qwen2.5-3B GGUF model ---
 info "Kiểm tra model weights Qwen2.5-3B..."

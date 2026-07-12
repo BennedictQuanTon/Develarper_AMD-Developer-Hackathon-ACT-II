@@ -3,8 +3,8 @@
 4-Layer AgentRouter
     Layer 1a: Semantic Cache (0 tokens)
     Layer 1b: AST Math Evaluator (0 tokens, deterministic)
-    Layer 2:  Weighted Scoring Classifier (~0ms, no model)
-    Layer 3:  Local SLM — Qwen2.5 via llama.cpp
+    Layer 2:  LLM Classifier (local Qwen, grammar-constrained, 0 tokens)
+    Layer 3:  Local SLM — Qwen2.5-3B via llama.cpp (serialized by engine lock)
     Layer 4:  Remote Fireworks API (category-aware model + prompt compression)
 """
 
@@ -79,7 +79,9 @@ class AgentRouter:
             return math_result
 
         # -------------------------------------------------------------------
-        # Layer 2: Weighted Classifier (offloaded to thread pool)
+        # Layer 2: LLM Classifier (offloaded to thread pool — local llama.cpp
+        # call is synchronous; offloading keeps the event loop responsive so
+        # concurrent API tasks can progress while classification runs).
         # -------------------------------------------------------------------
         loop = asyncio.get_running_loop()
         route = await loop.run_in_executor(None, classify, prompt)
@@ -94,16 +96,22 @@ class AgentRouter:
 
     async def _dispatch(self, task_id: str, prompt: str, route: str) -> str:
         try:
+            loop = asyncio.get_running_loop()
             # ---- Local routes ----
+            # Local handlers are synchronous llama.cpp calls. They are serialized
+            # by the engine's internal lock, so we offload each to a worker thread
+            # via run_in_executor — this lets remote API tasks (and other local
+            # tasks waiting for the lock) keep the event loop alive instead of
+            # freezing it for the duration of one local generation.
             if route == ROUTE_LOCAL_SENTIMENT:
-                res = self._sentiment.handle(prompt)
+                res = await loop.run_in_executor(None, self._sentiment.handle, prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] Sentiment escalated → remote", task_id)
                     res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_SENTIMENT)
                 return res
 
             if route == ROUTE_LOCAL_NER:
-                res = self._ner.handle(prompt)
+                res = await loop.run_in_executor(None, self._ner.handle, prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] NER escalated → remote", task_id)
                     res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_NER)
@@ -112,9 +120,9 @@ class AgentRouter:
             if route == ROUTE_LOCAL_GENERAL:
                 p = prompt.lower()
                 if any(w in p for w in ["summarize", "summary", "tldr"]):
-                    res = self._summarization.handle(prompt)
+                    res = await loop.run_in_executor(None, self._summarization.handle, prompt)
                 else:
-                    res = self._factual.handle(prompt)
+                    res = await loop.run_in_executor(None, self._factual.handle, prompt)
                 if res == "__ESCALATE__":
                     logger.info("[%s] Local general escalated → remote", task_id)
                     res = await self._remote_general.handle(prompt, category=ROUTE_LOCAL_GENERAL)

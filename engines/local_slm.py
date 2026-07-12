@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 from typing import Any, Optional
 
 from llama_cpp import Llama
@@ -9,12 +10,15 @@ logger = logging.getLogger(__name__)
 
 class LocalSLMEngine:
     _instance: Optional["LocalSLMEngine"] = None
+    _init_lock = threading.Lock()
 
     @classmethod
     def get_instance(cls) -> "LocalSLMEngine":
         if cls._instance is None:
-            model_path = os.environ.get("LOCAL_MODEL_PATH", "models/qwen2.5-1.5b-instruct-q4_k_m.gguf")
-            cls._instance = cls(model_path=model_path)
+            with cls._init_lock:
+                if cls._instance is None:
+                    model_path = os.environ.get("LOCAL_MODEL_PATH", "models/qwen2.5-3b-instruct-q4_k_m.gguf")
+                    cls._instance = cls(model_path=model_path)
         return cls._instance
 
     def __init__(self, model_path: str) -> None:
@@ -31,6 +35,11 @@ class LocalSLMEngine:
         logger.info(f"Parameters: n_ctx={n_ctx}, n_threads={n_threads}, n_gpu_layers={n_gpu_layers}")
 
         self.model = Llama(model_path=model_path, n_ctx=n_ctx, n_threads=n_threads, n_gpu_layers=n_gpu_layers, verbose=False)
+        # A single llama.cpp context is NOT safe for concurrent callers (the
+        # classifier and the local handlers all share this one model). This lock
+        # serializes every generate() call. Callers offload to worker threads so
+        # waiting on this lock never freezes the asyncio event loop.
+        self._call_lock = threading.Lock()
 
     def generate(self, prompt: str, system_prompt: str = "", max_tokens: int = 250, temperature: float = 0.1, grammar: Any = None) -> str:
         # Format using Qwen2.5 Chat Template
@@ -39,14 +48,15 @@ class LocalSLMEngine:
             formatted_prompt += f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         formatted_prompt += f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
-        response = self.model(
-            formatted_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stop=["<|im_end|>", "<|im_start|>", "assistant\n"],
-            echo=False,
-            grammar=grammar,
-        )
+        with self._call_lock:
+            response = self.model(
+                formatted_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=["<|im_end|>", "<|im_start|>", "assistant\n"],
+                echo=False,
+                grammar=grammar,
+            )
 
         if not isinstance(response, dict):
             raise ValueError("Expected dictionary response from Llama model")

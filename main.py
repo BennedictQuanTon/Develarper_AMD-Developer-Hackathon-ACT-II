@@ -12,7 +12,7 @@ import sys
 from dotenv import load_dotenv
 
 from agent.cache import SemanticCache
-from agent.classifier import SemanticClassifier
+from agent.classifier import classify
 from agent.router import AgentRouter
 from agent.schemas import Task
 from agent.watchdog import Watchdog
@@ -58,9 +58,14 @@ async def main() -> None:
         logger.info("Initializing agent components (GGUF + classifier)...")
         _cache = SemanticCache()
         _router = AgentRouter(cache=_cache)
-        # Pre-warm SemanticClassifier in the main thread so run_in_executor
-        # workers never race to load multiple SentenceTransformer instances.
-        SemanticClassifier.get_instance()
+        # Pre-warm the LLM classifier with one trivial call. The local model is
+        # already loaded by AgentRouter's handlers; this just primes the
+        # grammar object and the llama.cpp sampler cache so the first real task
+        # does not pay a cold-start tax. Safe to fail — real tasks still route.
+        try:
+            classify("warmup")
+        except Exception as exc:
+            logger.warning("Classifier warmup failed: %s", exc)
         logger.info("Initialization complete — starting task processing.")
     if _lock is None:
         _lock = asyncio.Lock()
