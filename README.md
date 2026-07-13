@@ -169,61 +169,61 @@ This reduces input + output tokens on every remote call.
 
 ## Getting Started
 
-> **Lần đầu fork về?** Chỉ cần 1 lệnh:
+> **First time forking?** Just one command:
 
 ```bash
 bash scripts/setup.sh
 ```
 
-Script này tự động:
-- Tạo virtual environment (`.venv`)
-- Cài tất cả dependencies từ `requirements.txt`
-- Cài `llama-cpp-python` (CPU wheel, không cần C++ compiler)
-- Download `Qwen2.5-3B Q4_K_M` GGUF (~2 GB)
-- Tạo `.env` từ `.env.example`
+This script automatically:
+- Creates a virtual environment (`.venv`)
+- Installs all dependencies from `requirements.txt`
+- Installs `llama-cpp-python` (CPU wheel, no C++ compiler needed)
+- Downloads `Qwen2.5-3B Q4_K_M` GGUF (~2 GB)
+- Creates `.env` from `.env.example`
 
-Sau đó điền API key vào `.env`:
+Then fill in your API key in `.env`:
 ```bash
 FIREWORKS_API_KEY=<your_key>
 ```
 
 ---
 
-## Chạy dự án
+## Running the Project
 
-### Chạy với input/output tùy chỉnh
+### Run with custom input/output
 
 ```bash
-# Dùng practice tasks mặc định
+# Use default practice tasks
 bash scripts/run.sh
 
-# Chỉ định input file
+# Specify input file
 bash scripts/run.sh path/to/tasks.json
 
-# Chỉ định cả input và output
+# Specify both input and output
 bash scripts/run.sh path/to/tasks.json path/to/results.json
 ```
 
-### Chạy test local + xem token stats
+### Run local test + view token stats
 
 ```bash
 PYTHONPATH=. python scripts/test_local.py
 ```
 
-Output mẫu:
+Sample output:
 ```
 [1/8] practice-01  │  route: LOCAL_GENERAL  │  ⏱ 1.2s
       📥 input: 114 tokens   📤 output: 16 tokens   📊 total: 130 tokens
 ANSWER : The capital of Australia is Canberra...
 
 ======================================================================
-  TỔNG KẾT TOKEN USAGE
+  TOKEN USAGE SUMMARY
 ======================================================================
-  📥 Tổng input tokens  : 1,107
-  📤 Tổng output tokens : 489
-  📊 Tổng cộng          : 1,596
+  📥 Total input tokens  : 1,107
+  📤 Total output tokens : 489
+  📊 Total                 : 1,596
 
-  ⚠️  Đây là LOCAL tokens (0 Fireworks tokens)
+  ⚠️  These are LOCAL tokens (0 Fireworks tokens)
 ```
 
 ### Benchmark prompting strategies
@@ -234,10 +234,10 @@ PYTHONPATH=. python scripts/prompt_benchmark.py
 
 Benchmarks 5 strategies (baseline, zero-shot strict, few-shot, chain-of-thought, self-consistency 3×) across sentiment and summarization — outputs CSV + markdown summary to `output/`.
 
-### Chạy unit tests
+### Run unit tests
 
 ```bash
-# Unit tests — không cần model (mocked)
+# Unit tests — no model needed (mocked)
 PYTHONPATH=. pytest tests/test_ast_eval.py tests/test_cache.py \
     tests/test_remote_llm.py tests/test_router.py -v
 
@@ -255,23 +255,23 @@ PYTHONPATH=. python tests/test_integration.py
 
 ## Docker Build & Grading Simulation
 
-> Download model weights trước khi build: `bash scripts/download_model.sh`
+> Download model weights before building: `bash scripts/download_model.sh`
 
 ```bash
-# 1. Build image (bắt buộc dùng --platform linux/amd64 để submit)
+# 1. Build image (must use --platform linux/amd64 to submit)
 docker buildx build --platform linux/amd64 \
     -t <your-dockerhub-username>/develarper-agent:latest .
 
-# 2. Kiểm tra image size (phải < 10 GB compressed)
+# 2. Check image size (must be < 10 GB compressed)
 docker images <your-dockerhub-username>/develarper-agent:latest
 
 # 3. Simulate grading environment (4 GB RAM, 2 CPUs, no network)
 FIREWORKS_API_KEY=your_key bash scripts/simulate_grading.sh
 
-# 4. Xem kết quả
+# 4. View results
 cat output_test/results.json
 
-# 5. Push lên Docker Hub khi sẵn sàng submit
+# 5. Push to Docker Hub when ready to submit
 docker push <your-dockerhub-username>/develarper-agent:latest
 ```
 
@@ -286,17 +286,17 @@ docker push <your-dockerhub-username>/develarper-agent:latest
 
 | Variable | Required | Description |
 |---|---|---|
-| `FIREWORKS_API_KEY` | Yes (grading) | API key — injected by harness lúc chấm |
-| `FIREWORKS_BASE_URL` | Yes (grading) | Proxy URL cho token counting — harness inject |
-| `ALLOWED_MODELS` | Yes (grading) | Comma-separated model IDs — harness inject |
-| `LOCAL_MODEL_PATH` | Optional | Đường dẫn GGUF (default: `models/qwen2.5-3b-instruct-q4_k_m.gguf`) |
-| `LOCAL_N_GPU_LAYERS` | Optional | GPU layers (`0` = CPU-only, `-1` = auto Metal trên Mac) |
+| `FIREWORKS_API_KEY` | Yes (grading) | API key — injected by harness during grading |
+| `FIREWORKS_BASE_URL` | Yes (grading) | Proxy URL for token counting — injected by harness |
+| `ALLOWED_MODELS` | Yes (grading) | Comma-separated model IDs — injected by harness |
+| `LOCAL_MODEL_PATH` | Optional | GGUF path (default: `models/qwen2.5-3b-instruct-q4_k_m.gguf`) |
+| `LOCAL_N_GPU_LAYERS` | Optional | GPU layers (`0` = CPU-only, `-1` = auto Metal on Mac) |
 | `LOCAL_N_THREADS` | Optional | CPU threads (default: `2`) |
 | `LOCAL_N_CTX` | Optional | Context window size (default: `2048`) |
-| `INPUT_PATH` | Runtime | Path đọc `tasks.json` (default: `/input/tasks.json`) |
-| `OUTPUT_PATH` | Runtime | Path ghi `results.json` (default: `/output/results.json`) |
+| `INPUT_PATH` | Runtime | Path to read `tasks.json` (default: `/input/tasks.json`) |
+| `OUTPUT_PATH` | Runtime | Path to write `results.json` (default: `/output/results.json`) |
 
-> **Lưu ý:** Harness sẽ inject `FIREWORKS_API_KEY`, `FIREWORKS_BASE_URL`, `ALLOWED_MODELS` lúc chấm — không cần hardcode trong image.
+> **Note:** The harness will inject `FIREWORKS_API_KEY`, `FIREWORKS_BASE_URL`, `ALLOWED_MODELS` during grading — no need to hardcode in the image.
 
 ---
 
@@ -305,10 +305,10 @@ docker push <your-dockerhub-username>/develarper-agent:latest
 | Constraint | Limit | Approach |
 |---|---|---|
 | RAM | 4 GB | Qwen2.5 ~2 GB + MiniLM ~200 MB ≈ ~2.2 GB total ✅ |
-| CPUs | 2 vCPUs | `n_threads=2` trong llama.cpp |
+| CPUs | 2 vCPUs | `n_threads=2` in llama.cpp |
 | Image size | 10 GB compressed | ~2–3 GB estimated ✅ |
-| Runtime | 10 phút | Watchdog fires at 570s, flush partial results |
-| Architecture | linux/amd64 | Build với `--platform linux/amd64` |
+| Runtime | 10 minutes | Watchdog fires at 570s, flush partial results |
+| Architecture | linux/amd64 | Build with `--platform linux/amd64` |
 
 ---
 
@@ -316,14 +316,14 @@ docker push <your-dockerhub-username>/develarper-agent:latest
 
 ```
 Minimize: Σ (input_tokens + output_tokens) sent via FIREWORKS_BASE_URL
-Subject to: accuracy ≥ 80% (binary gate — phải pass trước)
+Subject to: accuracy ≥ 80% (binary gate — must pass first)
 ```
 
 - **Local execution = 0 Fireworks tokens** → maximize local handling
 - **Local-first code strategy** → easy/medium code tasks solved locally with AST validation → only hard tasks or failed validations use API tokens
-- **Supervised PyTorch Classifier** → 100.00% routing accuracy → zero misroutes → zero unnecessary API token waste
-- **Prompt compression** → strip filler phrases + output suffix → giảm tokens mỗi remote call
-- **Per-category `max_tokens` budgets** → giới hạn output dài không cần thiết
+- **GBNF Grammar Constrained Classifier** → High routing accuracy → zero misroutes → zero unnecessary API token waste
+- **Prompt compression** → strip filler phrases + output suffix → reduces tokens per remote call
+- **Per-category `max_tokens` budgets** → limit unnecessary long outputs
 - **Semantic cache** → dedup identical/similar prompts
 - **Category-aware model selection** → pick best available model per task type from `ALLOWED_MODELS`
 - **Escalation model preferences** → local escalations prefer `minimax-m3` for cost efficiency
@@ -356,4 +356,4 @@ See [`tests/evaluation_report.md`](tests/evaluation_report.md) for detailed anal
 - **Linting**: `ruff check .` (target: Python 3.11, line-length: 150)
 - **Type checking**: `mypy .` (strict mode, Python 3.12)
 - **Pre-commit**: `pre-commit run --all-files` (ruff + ruff-format + mypy + file checks)
-- Không cần API key để chạy local SLM tasks và unit tests
+- No API key required to run local SLM tasks and unit tests
