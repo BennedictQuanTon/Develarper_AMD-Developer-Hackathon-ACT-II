@@ -125,7 +125,7 @@ class RemoteLLMEngine:
 
     @retry(
         reraise=True,
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type(
             (
@@ -184,27 +184,20 @@ class RemoteLLMEngine:
                 "temperature": temperature,
             }
 
-        timeout = aiohttp.ClientTimeout(total=20, connect=5)
-        # Use a class-level or module-level semaphore to limit concurrency
-        # Initialize it lazily in an async context since asyncio.Semaphore needs an active event loop
-        if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(15)
+        timeout = aiohttp.ClientTimeout(total=15, connect=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(endpoint, headers=headers, json=payload) as response:
+                if response.status != 200:
+                    text = await response.text()
+                    logger.error("Fireworks API error (status %d): %s", response.status, text)
+                    response.raise_for_status()
 
-        sem: asyncio.Semaphore = self._semaphore
-        async with sem:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(endpoint, headers=headers, json=payload) as response:
-                    if response.status != 200:
-                        text = await response.text()
-                        logger.error("Fireworks API error (status %d): %s", response.status, text)
-                        response.raise_for_status()
-
-                    data = await response.json()
-                    try:
-                        if is_chat:
-                            return str(data["choices"][0]["message"]["content"]).strip()
-                        else:
-                            return str(data["choices"][0]["text"]).strip()
-                    except KeyError as e:
-                        logger.error("Response structure: %s", data)
-                        raise e
+                data = await response.json()
+                try:
+                    if is_chat:
+                        return str(data["choices"][0]["message"]["content"]).strip()
+                    else:
+                        return str(data["choices"][0]["text"]).strip()
+                except KeyError as e:
+                    logger.error("Response structure: %s", data)
+                    raise e

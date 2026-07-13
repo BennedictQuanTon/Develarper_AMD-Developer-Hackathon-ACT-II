@@ -49,6 +49,6 @@ ENV PYTHONUNBUFFERED=1 \
     LOCAL_MODEL_PATH=/app/models/qwen2.5-3b-instruct-q4_k_m.gguf \
     LOCAL_N_GPU_LAYERS=0 \
     LOCAL_N_THREADS=2 \
-    LOCAL_N_CTX=2048
+    LOCAL_N_CTX=1024
 
 ENTRYPOINT ["/app/entrypoint.sh"]

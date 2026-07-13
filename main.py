@@ -4,6 +4,7 @@ Reads /input/tasks.json, routes each task through AgentRouter, writes /output/re
 """
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
@@ -12,7 +13,6 @@ import sys
 from dotenv import load_dotenv
 
 from agent.cache import SemanticCache
-from agent.classifier import classify
 from agent.router import AgentRouter
 from agent.schemas import Task
 from agent.watchdog import Watchdog
@@ -41,7 +41,15 @@ def _get_results() -> list[dict[str, str]]:
 
 async def _process(task: Task) -> None:
     assert _router is not None and _lock is not None
-    answer = await _router.route(task.task_id, task.prompt)
+    try:
+        answer = await asyncio.wait_for(_router.route(task.task_id, task.prompt), timeout=25.0)
+    except TimeoutError:
+        logger.error("Task %s timed out after 25s", task.task_id)
+        answer = "Error: Execution timed out."
+    except Exception as exc:
+        logger.error("Task %s failed: %s", task.task_id, exc)
+        answer = f"Error: {exc}"
+
     async with _lock:
         _completed.append({"task_id": task.task_id, "answer": answer})
     logger.info("Done: %s", task.task_id)
@@ -50,6 +58,8 @@ async def _process(task: Task) -> None:
 async def main() -> None:
     global _cache, _router, _lock
 
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
     # -----------------------------------------------------------------------
     # Initialization block — runs INSIDE asyncio.run(), after loop is live.
     # Guards allow tests to pre-inject mocks before calling main().
@@ -57,15 +67,7 @@ async def main() -> None:
     if _router is None:
         logger.info("Initializing agent components (GGUF + classifier)...")
         _cache = SemanticCache()
-        _router = AgentRouter(cache=_cache)
-        # Pre-warm the LLM classifier with one trivial call. The local model is
-        # already loaded by AgentRouter's handlers; this just primes the
-        # grammar object and the llama.cpp sampler cache so the first real task
-        # does not pay a cold-start tax. Safe to fail — real tasks still route.
-        try:
-            classify("warmup")
-        except Exception as exc:
-            logger.warning("Classifier warmup failed: %s", exc)
+        _router = AgentRouter(cache=_cache, executor=executor)
         logger.info("Initialization complete — starting task processing.")
     if _lock is None:
         _lock = asyncio.Lock()
@@ -114,6 +116,7 @@ async def main() -> None:
         logger.error("Fatal error: %s", exc)
     finally:
         watchdog.stop()
+        executor.shutdown(wait=False)
 
 
 if __name__ == "__main__":
