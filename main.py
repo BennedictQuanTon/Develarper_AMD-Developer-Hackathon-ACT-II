@@ -42,9 +42,9 @@ def _get_results() -> list[dict[str, str]]:
 async def _process(task: Task) -> None:
     assert _router is not None and _lock is not None
     try:
-        answer = await asyncio.wait_for(_router.route(task.task_id, task.prompt), timeout=25.0)
+        answer = await asyncio.wait_for(_router.route(task.task_id, task.prompt), timeout=120.0)
     except TimeoutError:
-        logger.error("Task %s timed out after 25s", task.task_id)
+        logger.error("Task %s timed out after 120s", task.task_id)
         answer = "Error: Execution timed out."
     except Exception as exc:
         logger.error("Task %s failed: %s", task.task_id, exc)
