@@ -106,6 +106,8 @@ class RemoteLLMEngine:
         self._semaphore: asyncio.Semaphore | None = None
         self.api_key = os.environ.get("FIREWORKS_API_KEY", "")
         raw_url = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
+        if not raw_url.startswith("http"):
+            raw_url = f"https://{raw_url}"
 
         # Normalise: ensure the URL ends at /v1
         if raw_url.endswith("/v1"):
@@ -116,8 +118,6 @@ class RemoteLLMEngine:
             base = raw_url.rstrip("/") + "/v1"
 
         self.base_url = base
-
-        self.model_prefix = "accounts/fireworks/models/"
 
         if not self.api_key:
             logger.warning("FIREWORKS_API_KEY is not set. Remote API calls will fail with 401. Set the key in your .env file before running Phase 5.")
@@ -145,11 +145,7 @@ class RemoteLLMEngine:
     ) -> str:
         # Compress prompt before sending
         compressed = compress_prompt(prompt, category)
-        model_name = select_remote_model(category)
-        if model_name.startswith(self.model_prefix):
-            model = model_name
-        else:
-            model = f"{self.model_prefix}{model_name}"
+        model = select_remote_model(category)
         logger.info("Remote [%s] → model=%s max_tokens=%d", category, model, max_tokens)
 
         headers = {
@@ -158,7 +154,7 @@ class RemoteLLMEngine:
         }
 
         # Dynamically switch between Chat Completions and raw Completions
-        is_chat = any(x in model_name.lower() for x in ["-it", "kimi", "minimax"])
+        is_chat = any(x in model.lower() for x in ["-it", "kimi", "minimax"])
         endpoint = f"{self.base_url}/chat/completions" if is_chat else f"{self.base_url}/completions"
 
         if is_chat:
